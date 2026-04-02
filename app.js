@@ -31,6 +31,7 @@ function cloneData(value) {
 const defaultState = {
   huntTitle: DEFAULT_TITLE,
   eggCount: 3,
+  introText: "Tere, Robin! Nii tore, et avasid munajahi rakenduse. Pühadejänkud on jätnud sulle vahvad vihjed. Kuula hoolikalt, leia munad üles ja tunne rõõmu sellest seiklusest!",
   steps: [
     {
       id: makeId(),
@@ -87,6 +88,7 @@ const elements = {
   adminPanel: document.getElementById("adminPanel"),
   huntTitleInput: document.getElementById("huntTitleInput"),
   eggCountInput: document.getElementById("eggCountInput"),
+  introTextInput: document.getElementById("introTextInput"),
   voiceStatus: document.getElementById("voiceStatus"),
   installTools: document.getElementById("installTools"),
   installButton: document.getElementById("installButton"),
@@ -110,6 +112,7 @@ let autoSpeakTimeoutId = null;
 let deferredInstallPrompt = null;
 let wakeLock = null;
 let adminOpen = false;
+let hasSpokenOpeningIntro = false;
 
 initialize();
 
@@ -121,6 +124,7 @@ function initialize() {
   registerServiceWorker();
   render();
   requestWakeLock();
+  queueOpeningIntro();
 }
 
 function loadState() {
@@ -161,6 +165,7 @@ function sanitizeState(rawState) {
       ? rawState.huntTitle.trim()
       : DEFAULT_TITLE,
     eggCount: normalizeEggCount(rawState?.eggCount, steps.length),
+    introText: typeof rawState?.introText === "string" ? rawState.introText : defaultState.introText,
     steps,
     currentStepIndex: Number.isInteger(rawState?.currentStepIndex) ? rawState.currentStepIndex : 0,
     isCompleted: Boolean(rawState?.isCompleted)
@@ -244,6 +249,10 @@ function bindTopLevelEvents() {
 
   elements.eggCountInput.addEventListener("change", handleEggCountChange);
   elements.eggCountInput.addEventListener("blur", handleEggCountChange);
+  elements.introTextInput.addEventListener("input", (event) => {
+    state.introText = event.target.value;
+    saveState("Tervitusjutt salvestati ✨");
+  });
 
   elements.addStepButton.addEventListener("click", addStep);
   elements.saveButton.addEventListener("click", () => saveState("Kõik muudatused salvestati 🥚"));
@@ -424,6 +433,7 @@ function renderAdminPanelState() {
 function renderAdmin() {
   elements.huntTitleInput.value = state.huntTitle;
   elements.eggCountInput.value = state.eggCount;
+  elements.introTextInput.value = state.introText;
   elements.stepsList.innerHTML = "";
   elements.adminEmptyState.hidden = state.steps.length !== 0;
 
@@ -590,6 +600,32 @@ function handleEggCountChange(event) {
   renderGameView();
 }
 
+function queueOpeningIntro() {
+  if (hasSpokenOpeningIntro || adminOpen || !state.introText.trim() || !elements.passwordOverlay.hidden) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (hasSpokenOpeningIntro || adminOpen || document.visibilityState !== "visible" || !elements.passwordOverlay.hidden) {
+      return;
+    }
+
+    speakOpeningIntro();
+  }, 700);
+}
+
+function speakOpeningIntro() {
+  if (hasSpokenOpeningIntro || !state.introText.trim()) {
+    return;
+  }
+
+  speakText(state.introText.trim(), {
+    onstart: () => {
+      hasSpokenOpeningIntro = true;
+    }
+  });
+}
+
 function handleStepInput(event) {
   const card = event.target.closest(".step-card");
 
@@ -724,6 +760,7 @@ function clearAllData() {
 
   state.huntTitle = DEFAULT_TITLE;
   state.eggCount = 0;
+  state.introText = "";
   state.steps = [];
   state.currentStepIndex = 0;
   state.isCompleted = false;
@@ -798,11 +835,6 @@ function queueAutoSpeak() {
 }
 
 function speakCurrentStep(forceReplay) {
-  if (!("speechSynthesis" in window)) {
-    showSaveStatus("Selles brauseris ei ole ettelugemine saadaval.");
-    return;
-  }
-
   const currentStep = state.steps[state.currentStepIndex];
 
   if (!currentStep || !currentStep.hintText.trim()) {
@@ -810,17 +842,40 @@ function speakCurrentStep(forceReplay) {
     return;
   }
 
+  speakText(currentStep.hintText, { forceReplay });
+}
+
+function speakText(text, options = {}) {
+  if (!("speechSynthesis" in window)) {
+    showSaveStatus("Selles brauseris ei ole ettelugemine saadaval.");
+    return;
+  }
+
+  const { forceReplay = false, onstart = null, onend = null, onerror = null } = options;
+
   if (forceReplay) {
     stopSpeaking();
   }
 
-  const utterance = new SpeechSynthesisUtterance(currentStep.hintText);
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = estonianVoice?.lang || "et-EE";
   utterance.rate = 0.95;
   utterance.pitch = 1.05;
 
   if (estonianVoice) {
     utterance.voice = estonianVoice;
+  }
+
+  if (typeof onstart === "function") {
+    utterance.addEventListener("start", onstart, { once: true });
+  }
+
+  if (typeof onend === "function") {
+    utterance.addEventListener("end", onend, { once: true });
+  }
+
+  if (typeof onerror === "function") {
+    utterance.addEventListener("error", onerror, { once: true });
   }
 
   window.speechSynthesis.speak(utterance);
