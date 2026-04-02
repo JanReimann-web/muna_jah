@@ -1,6 +1,6 @@
 /*
 Vanemale:
-1. Ava lehe allosas "Vanema seaded" ja sisesta parool.
+1. Vajuta pealkirjakaardil järjest 7 korda, et avada vanema seaded, ja sisesta parool.
 2. Lisa munad ning igale munale nii palju vihjeid kui soovid.
 3. Vajuta "Alusta mängu algusest", et peita seaded ja alustada lapsega jahti.
 
@@ -86,12 +86,14 @@ const defaultState = {
   ],
   currentEggIndex: 0,
   currentClueIndex: 0,
+  nextClueUnlockAt: 0,
   isCompleted: false
 };
 
 const state = loadState();
 
 const elements = {
+  heroCard: document.getElementById("heroCard"),
   heroTitle: document.getElementById("heroTitle"),
   gameEmptyState: document.getElementById("gameEmptyState"),
   gameView: document.getElementById("gameView"),
@@ -102,15 +104,12 @@ const elements = {
   clueImageWrap: document.getElementById("clueImageWrap"),
   clueImage: document.getElementById("clueImage"),
   speakButton: document.getElementById("speakButton"),
-  previousButton: document.getElementById("previousButton"),
   nextButton: document.getElementById("nextButton"),
   foundButton: document.getElementById("foundButton"),
-  restartButton: document.getElementById("restartButton"),
   endScreen: document.getElementById("endScreen"),
   endTitle: document.querySelector("#endScreen h3"),
   endCopy: document.querySelector("#endScreen .end-copy"),
   playAgainButton: document.getElementById("playAgainButton"),
-  toggleAdminButton: document.getElementById("toggleAdminButton"),
   passwordOverlay: document.getElementById("passwordOverlay"),
   passwordInput: document.getElementById("passwordInput"),
   passwordError: document.getElementById("passwordError"),
@@ -142,6 +141,9 @@ let deferredInstallPrompt = null;
 let wakeLock = null;
 let adminOpen = false;
 let hasSpokenOpeningIntro = false;
+let nextClueCountdownInterval = null;
+let heroTapCount = 0;
+let heroTapResetTimeoutId = null;
 
 initialize();
 
@@ -152,6 +154,7 @@ function initialize() {
   bindWakeLockEvents();
   bindOpeningIntroFallback();
   registerServiceWorker();
+  primeNextClueCooldown();
   render();
   requestWakeLock();
   queueOpeningIntro();
@@ -202,6 +205,7 @@ function sanitizeState(rawState) {
       ? rawState.currentEggIndex
       : Number.isInteger(rawState?.currentStepIndex) ? rawState.currentStepIndex : 0,
     currentClueIndex: Number.isInteger(rawState?.currentClueIndex) ? rawState.currentClueIndex : 0,
+    nextClueUnlockAt: Number.isFinite(rawState?.nextClueUnlockAt) ? rawState.nextClueUnlockAt : 0,
     isCompleted: Boolean(rawState?.isCompleted)
   };
 
@@ -317,6 +321,10 @@ function saveState(statusText = "Salvestatud 🌷") {
   showSaveStatus(statusText);
 }
 
+function persistStateSilently() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
 function showSaveStatus(message) {
   elements.saveStatus.textContent = message;
 
@@ -329,8 +337,15 @@ function showSaveStatus(message) {
   }, 2200);
 }
 
+function primeNextClueCooldown() {
+  if (!state.isCompleted && hasNextClueInCurrentEgg() && state.nextClueUnlockAt === 0) {
+    state.nextClueUnlockAt = Date.now() + 60000;
+    persistStateSilently();
+  }
+}
+
 function bindTopLevelEvents() {
-  elements.toggleAdminButton.addEventListener("click", handleParentSettingsTap);
+  elements.heroCard.addEventListener("pointerdown", handleHeroCardTap);
   elements.passwordSubmitButton.addEventListener("click", submitPassword);
   elements.passwordCancelButton.addEventListener("click", closePasswordPrompt);
   elements.passwordInput.addEventListener("keydown", (event) => {
@@ -358,10 +373,8 @@ function bindTopLevelEvents() {
   elements.clearAllButton.addEventListener("click", clearAllData);
 
   elements.speakButton.addEventListener("click", () => speakCurrentClue(true));
-  elements.previousButton.addEventListener("click", goToPreviousClue);
   elements.nextButton.addEventListener("click", goToNextClue);
   elements.foundButton.addEventListener("click", advanceEgg);
-  elements.restartButton.addEventListener("click", startGameFromBeginning);
   elements.playAgainButton.addEventListener("click", startGameFromBeginning);
 
   elements.eggsList.addEventListener("input", handleAdminInput);
@@ -533,8 +546,6 @@ function renderHero() {
 
 function renderAdminPanelState() {
   elements.adminPanel.hidden = !adminOpen;
-  elements.toggleAdminButton.setAttribute("aria-expanded", String(adminOpen));
-  elements.toggleAdminButton.textContent = adminOpen ? "Peida vanema seaded" : "Vanema seaded";
 }
 
 function renderAdmin() {
@@ -621,10 +632,12 @@ function renderGameView() {
   elements.endScreen.hidden = !hasEggs || !state.isCompleted;
 
   if (!hasEggs) {
+    updateNextClueButton();
     return;
   }
 
   if (state.isCompleted) {
+    updateNextClueButton();
     elements.endTitle.textContent = `Tubli! Kõik ${state.eggs.length} muna on leitud! 🐰🥚🎉`;
     elements.endCopy.textContent = `${state.huntTitle || DEFAULT_TITLE} sai rõõmsalt läbi.`;
     return;
@@ -638,8 +651,8 @@ function renderGameView() {
     elements.clueText.textContent = "Selle muna vihje ootab veel lisamist. 🌷";
     elements.clueImageWrap.hidden = true;
     elements.speakButton.disabled = true;
-    elements.previousButton.hidden = true;
     elements.nextButton.hidden = true;
+    updateNextClueButton();
     return;
   }
 
@@ -655,8 +668,8 @@ function renderGameView() {
     elements.clueImage.alt = "";
   }
 
-  elements.previousButton.hidden = state.currentClueIndex === 0;
   elements.nextButton.hidden = state.currentClueIndex >= clueCount - 1;
+  updateNextClueButton();
 }
 
 function getCurrentEgg() {
@@ -673,13 +686,85 @@ function getCurrentClue() {
   return egg.clues[state.currentClueIndex] || null;
 }
 
-function handleParentSettingsTap() {
-  if (adminOpen) {
-    closeAdminPanel();
+function hasNextClueInCurrentEgg() {
+  const egg = getCurrentEgg();
+  return Boolean(egg && state.currentClueIndex < egg.clues.length - 1);
+}
+
+function armNextClueCooldown() {
+  state.nextClueUnlockAt = hasNextClueInCurrentEgg() ? Date.now() + 60000 : 0;
+  updateNextClueButton();
+}
+
+function isNextClueLocked() {
+  return hasNextClueInCurrentEgg() && state.nextClueUnlockAt > Date.now();
+}
+
+function updateNextClueButton() {
+  if (nextClueCountdownInterval) {
+    window.clearInterval(nextClueCountdownInterval);
+    nextClueCountdownInterval = null;
+  }
+
+  if (state.isCompleted || !hasNextClueInCurrentEgg()) {
+    elements.nextButton.textContent = "Järgmine vihje";
+    elements.nextButton.disabled = false;
     return;
   }
 
-  openPasswordPrompt();
+  const refreshLabel = () => {
+    const remainingMs = state.nextClueUnlockAt - Date.now();
+
+    if (remainingMs <= 0) {
+      elements.nextButton.disabled = false;
+      elements.nextButton.textContent = "Järgmine vihje";
+
+      if (nextClueCountdownInterval) {
+        window.clearInterval(nextClueCountdownInterval);
+        nextClueCountdownInterval = null;
+      }
+
+      return;
+    }
+
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    elements.nextButton.disabled = true;
+    elements.nextButton.textContent = `Järgmine vihje ${remainingSeconds}s`;
+  };
+
+  refreshLabel();
+
+  if (isNextClueLocked()) {
+    nextClueCountdownInterval = window.setInterval(refreshLabel, 1000);
+  }
+}
+
+function handleHeroCardTap() {
+  if (adminOpen || !elements.passwordOverlay.hidden) {
+    return;
+  }
+
+  heroTapCount += 1;
+
+  if (heroTapResetTimeoutId) {
+    window.clearTimeout(heroTapResetTimeoutId);
+  }
+
+  heroTapResetTimeoutId = window.setTimeout(() => {
+    heroTapCount = 0;
+    heroTapResetTimeoutId = null;
+  }, 1800);
+
+  if (heroTapCount >= 7) {
+    heroTapCount = 0;
+
+    if (heroTapResetTimeoutId) {
+      window.clearTimeout(heroTapResetTimeoutId);
+      heroTapResetTimeoutId = null;
+    }
+
+    openPasswordPrompt();
+  }
 }
 
 function openPasswordPrompt() {
@@ -949,6 +1034,7 @@ function clearAllData() {
   state.eggs = [];
   state.currentEggIndex = 0;
   state.currentClueIndex = 0;
+  state.nextClueUnlockAt = 0;
   state.isCompleted = false;
   hasSpokenOpeningIntro = false;
   stopSpeaking();
@@ -960,28 +1046,15 @@ function clearAllData() {
 function startGameFromBeginning() {
   state.currentEggIndex = 0;
   state.currentClueIndex = 0;
+  state.nextClueUnlockAt = 0;
   state.isCompleted = false;
+  armNextClueCooldown();
   saveState("Mäng alustati algusest 🥚");
   closeAdminPanel();
   renderGameView();
   requestWakeLock();
   queueAutoSpeak();
   window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function goToPreviousClue() {
-  const currentEgg = getCurrentEgg();
-
-  if (!currentEgg || state.currentClueIndex <= 0) {
-    return;
-  }
-
-  stopSpeaking();
-  state.currentClueIndex -= 1;
-  state.isCompleted = false;
-  saveState("Liikusid eelmise vihje juurde");
-  renderGameView();
-  queueAutoSpeak();
 }
 
 function goToNextClue() {
@@ -991,8 +1064,13 @@ function goToNextClue() {
     return;
   }
 
+  if (isNextClueLocked()) {
+    return;
+  }
+
   stopSpeaking();
   state.currentClueIndex += 1;
+  armNextClueCooldown();
   state.isCompleted = false;
   saveState("Liikusid järgmise vihje juurde");
   renderGameView();
@@ -1008,10 +1086,12 @@ function advanceEgg() {
 
   if (state.currentEggIndex >= state.eggs.length - 1) {
     state.isCompleted = true;
+    state.nextClueUnlockAt = 0;
     releaseWakeLock();
   } else {
     state.currentEggIndex += 1;
     state.currentClueIndex = 0;
+    armNextClueCooldown();
   }
 
   saveState("Liikusid järgmise muna juurde ✨");

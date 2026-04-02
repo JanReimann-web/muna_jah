@@ -398,15 +398,6 @@ button:disabled {
   font-size: 0.95rem;
 }
 
-.parent-entry {
-  padding: 12px;
-}
-
-.parent-button {
-  width: 100%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 241, 255, 0.92));
-}
-
 .image-preview-wrap,
 .clue-image-wrap {
   overflow: hidden;

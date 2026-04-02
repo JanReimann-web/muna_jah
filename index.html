@@ -24,7 +24,7 @@
       <span>✨</span>
     </div>
 
-    <header class="hero-card">
+    <header class="hero-card" id="heroCard">
       <p class="eyebrow">🐰 🥚 ✨</p>
       <h1 id="heroTitle">Robini munajaht 🐰</h1>
       <p class="hero-copy">Leia kõik peidetud munad ✨</p>
@@ -54,10 +54,8 @@
 
           <div class="game-actions">
             <button id="speakButton" class="pill-button primary-button" type="button">🔊 Kuula vihjet</button>
-            <button id="previousButton" class="mini-button" type="button">⬅ Eelmine vihje</button>
             <button id="nextButton" class="mini-button" type="button">➡ Järgmine vihje</button>
             <button id="foundButton" class="pill-button accent-button" type="button">🥚 Leidsin muna</button>
-            <button id="restartButton" class="mini-button" type="button">⏮ Alusta uuesti</button>
           </div>
         </div>
 
@@ -65,12 +63,8 @@
           <div class="celebration-burst" aria-hidden="true">🐰🥚🎉✨🌷</div>
           <h3>Tubli! Kõik munad on leitud! 🐰🥚🎉</h3>
           <p class="end-copy">Kevadine seiklus sai läbi ja kõik peidetud üllatused leidsid tee üles.</p>
-          <button id="playAgainButton" class="pill-button accent-button" type="button">Mängi uuesti</button>
+          <button id="playAgainButton" class="pill-button accent-button" type="button">Alusta algusest</button>
         </div>
-      </section>
-
-      <section class="card parent-entry">
-        <button id="toggleAdminButton" class="mini-button parent-button" type="button" aria-expanded="false" aria-controls="adminPanel">Vanema seaded</button>
       </section>
 
       <section id="passwordOverlay" class="password-overlay" hidden>
