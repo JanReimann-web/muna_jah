@@ -1,16 +1,17 @@
 /*
 Vanemale:
-1. Ava "Admin", määra pealkiri ja lisa või muuda vihjeid.
-2. Soovi korral lisa igale vihjele pilt ning vali, kas pilt kuvatakse ja kas vihje loetakse ette.
-3. Vajuta "Salvesta" või "Alusta mängu algusest", et alustada lapsega munajahti.
+1. Ava lehe allosas "Vanema seaded".
+2. Pane paika pealkiri, munade koguarv ja vihjed.
+3. Vajuta "Alusta mängu algusest", et peita seaded ja alustada uuesti esimesest vihjest.
 
 PWA paigaldamine telefoni avakuvale:
 1. Ava rakendus telefonis brauseris.
-2. Vali brauseri menüüst "Add to Home Screen", "Lisa avaekraanile" või "Installi rakendus".
+2. Vali menüüst "Lisa avaekraanile" või "Installi rakendus".
 3. Pärast esmast avamist töötab rakendus ka võrguühenduseta.
 */
 
-const STORAGE_KEY = "munajaht-pwa-data-v1";
+const STORAGE_KEY = "munajaht-pwa-data-v2";
+const LEGACY_STORAGE_KEYS = ["munajaht-pwa-data-v1"];
 const VOICE_CHECK_DELAY = 200;
 const DEFAULT_TITLE = "Robini munajaht 🐰";
 
@@ -28,6 +29,7 @@ function cloneData(value) {
 
 const defaultState = {
   huntTitle: DEFAULT_TITLE,
+  eggCount: 3,
   steps: [
     {
       id: makeId(),
@@ -61,34 +63,47 @@ const defaultState = {
 const state = loadState();
 
 const elements = {
-  adminPanel: document.getElementById("adminPanel"),
+  heroTitle: document.getElementById("heroTitle"),
   gamePanel: document.getElementById("gamePanel"),
-  installButton: document.getElementById("installButton"),
-  installHint: document.getElementById("installHint"),
-  huntTitleInput: document.getElementById("huntTitleInput"),
-  stepsList: document.getElementById("stepsList"),
-  adminEmptyState: document.getElementById("adminEmptyState"),
   gameEmptyState: document.getElementById("gameEmptyState"),
-  progressChip: document.getElementById("progressChip"),
   gameView: document.getElementById("gameView"),
-  endScreen: document.getElementById("endScreen"),
-  gameTitle: document.getElementById("gameTitle"),
+  progressChip: document.getElementById("progressChip"),
+  eggCountChip: document.getElementById("eggCountChip"),
   clueText: document.getElementById("clueText"),
   clueImageWrap: document.getElementById("clueImageWrap"),
   clueImage: document.getElementById("clueImage"),
-  voiceStatus: document.getElementById("voiceStatus"),
-  wakeLockStatus: document.getElementById("wakeLockStatus"),
-  saveStatus: document.getElementById("saveStatus"),
-  stepCardTemplate: document.getElementById("stepCardTemplate"),
+  previousButton: document.getElementById("previousButton"),
+  endScreen: document.getElementById("endScreen"),
   endTitle: document.querySelector("#endScreen h3"),
-  endCopy: document.querySelector("#endScreen .end-copy")
+  endCopy: document.querySelector("#endScreen .end-copy"),
+  toggleAdminButton: document.getElementById("toggleAdminButton"),
+  closeAdminButton: document.getElementById("closeAdminButton"),
+  adminPanel: document.getElementById("adminPanel"),
+  huntTitleInput: document.getElementById("huntTitleInput"),
+  eggCountInput: document.getElementById("eggCountInput"),
+  voiceStatus: document.getElementById("voiceStatus"),
+  installTools: document.getElementById("installTools"),
+  installButton: document.getElementById("installButton"),
+  installHint: document.getElementById("installHint"),
+  addStepButton: document.getElementById("addStepButton"),
+  saveButton: document.getElementById("saveButton"),
+  startGameButton: document.getElementById("startGameButton"),
+  clearAllButton: document.getElementById("clearAllButton"),
+  stepsList: document.getElementById("stepsList"),
+  adminEmptyState: document.getElementById("adminEmptyState"),
+  saveStatus: document.getElementById("saveStatus"),
+  speakButton: document.getElementById("speakButton"),
+  foundButton: document.getElementById("foundButton"),
+  restartButton: document.getElementById("restartButton"),
+  playAgainButton: document.getElementById("playAgainButton"),
+  stepCardTemplate: document.getElementById("stepCardTemplate")
 };
 
-let currentMode = "admin";
 let estonianVoice = null;
 let autoSpeakTimeoutId = null;
 let deferredInstallPrompt = null;
 let wakeLock = null;
+let adminOpen = false;
 
 initialize();
 
@@ -99,33 +114,48 @@ function initialize() {
   bindWakeLockEvents();
   registerServiceWorker();
   render();
+  requestWakeLock();
 }
 
 function loadState() {
   try {
-    const savedData = localStorage.getItem(STORAGE_KEY);
+    const savedData = localStorage.getItem(STORAGE_KEY) || loadLegacyState();
 
     if (!savedData) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultState));
       return cloneData(defaultState);
     }
 
-    const parsed = JSON.parse(savedData);
-    return sanitizeState(parsed);
+    return sanitizeState(JSON.parse(savedData));
   } catch (error) {
     console.error("Rakenduse andmete lugemine ebaõnnestus:", error);
     return cloneData(defaultState);
   }
 }
 
+function loadLegacyState() {
+  for (const key of LEGACY_STORAGE_KEYS) {
+    const legacyData = localStorage.getItem(key);
+
+    if (legacyData) {
+      return legacyData;
+    }
+  }
+
+  return "";
+}
+
 function sanitizeState(rawState) {
+  const steps = Array.isArray(rawState?.steps)
+    ? rawState.steps.map(sanitizeStep).filter(Boolean)
+    : [];
+
   const safeState = {
     huntTitle: typeof rawState?.huntTitle === "string" && rawState.huntTitle.trim()
       ? rawState.huntTitle.trim()
       : DEFAULT_TITLE,
-    steps: Array.isArray(rawState?.steps)
-      ? rawState.steps.map(sanitizeStep).filter(Boolean)
-      : [],
+    eggCount: normalizeEggCount(rawState?.eggCount, steps.length),
+    steps,
     currentStepIndex: Number.isInteger(rawState?.currentStepIndex) ? rawState.currentStepIndex : 0,
     isCompleted: Boolean(rawState?.isCompleted)
   };
@@ -161,6 +191,16 @@ function sanitizeStep(step, index = 0) {
   };
 }
 
+function normalizeEggCount(value, minimum = 0) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed)) {
+    return Math.max(minimum, minimum || 0);
+  }
+
+  return Math.max(minimum, parsed);
+}
+
 function saveState(statusText = "Salvestatud 🌷") {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   showSaveStatus(statusText);
@@ -179,25 +219,28 @@ function showSaveStatus(message) {
 }
 
 function bindTopLevelEvents() {
-  document.querySelectorAll("[data-mode-switch]").forEach((button) => {
-    button.addEventListener("click", () => switchMode(button.dataset.modeSwitch));
-  });
+  elements.toggleAdminButton.addEventListener("click", toggleAdminPanel);
+  elements.closeAdminButton.addEventListener("click", closeAdminPanel);
 
   elements.huntTitleInput.addEventListener("input", (event) => {
     state.huntTitle = event.target.value.trimStart();
     saveState("Pealkiri salvestati ✨");
+    renderHero();
     renderGameView();
   });
 
-  document.getElementById("addStepButton").addEventListener("click", addStep);
-  document.getElementById("saveButton").addEventListener("click", () => saveState("Kõik muudatused salvestati 🥚"));
-  document.getElementById("clearAllButton").addEventListener("click", clearAllData);
-  document.getElementById("startGameButton").addEventListener("click", startGameFromBeginning);
-  document.getElementById("speakButton").addEventListener("click", () => speakCurrentStep(true));
-  document.getElementById("foundButton").addEventListener("click", advanceGame);
-  document.getElementById("restartButton").addEventListener("click", startGameFromBeginning);
-  document.getElementById("previousButton").addEventListener("click", goToPreviousStep);
-  document.getElementById("playAgainButton").addEventListener("click", startGameFromBeginning);
+  elements.eggCountInput.addEventListener("change", handleEggCountChange);
+  elements.eggCountInput.addEventListener("blur", handleEggCountChange);
+
+  elements.addStepButton.addEventListener("click", addStep);
+  elements.saveButton.addEventListener("click", () => saveState("Kõik muudatused salvestati 🥚"));
+  elements.startGameButton.addEventListener("click", startGameFromBeginning);
+  elements.clearAllButton.addEventListener("click", clearAllData);
+  elements.speakButton.addEventListener("click", () => speakCurrentStep(true));
+  elements.foundButton.addEventListener("click", advanceGame);
+  elements.restartButton.addEventListener("click", startGameFromBeginning);
+  elements.previousButton.addEventListener("click", goToPreviousStep);
+  elements.playAgainButton.addEventListener("click", startGameFromBeginning);
   elements.installButton.addEventListener("click", installApp);
 
   elements.stepsList.addEventListener("input", handleStepInput);
@@ -209,14 +252,13 @@ function bindInstallPrompt() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    elements.installButton.hidden = false;
-    elements.installHint.textContent = "Rakendus on valmis paigaldamiseks sinu Androidi avaekraanile.";
+    elements.installTools.hidden = false;
+    elements.installHint.textContent = "Rakendus on valmis paigaldamiseks avaekraanile.";
   });
 
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
-    elements.installButton.hidden = true;
-    elements.installHint.textContent = "Rakendus on paigaldatud. Ava see nüüd avaekraanilt.";
+    elements.installTools.hidden = true;
   });
 }
 
@@ -231,13 +273,14 @@ function bindSpeechVoices() {
 
 function updatePreferredVoice() {
   if (!("speechSynthesis" in window)) {
+    elements.voiceStatus.textContent = "Ettelugemine ei ole selles brauseris saadaval.";
     return;
   }
 
   const voices = window.speechSynthesis.getVoices();
 
   if (!voices.length) {
-    updateVoiceStatus();
+    elements.voiceStatus.textContent = "Otsin sobivat eesti häält...";
     return;
   }
 
@@ -268,55 +311,48 @@ function scoreVoice(voice) {
 
 function updateVoiceStatus() {
   if (!("speechSynthesis" in window)) {
-    elements.voiceStatus.textContent = "🔇 Kõne: selles brauseris pole ettelugemine saadaval";
+    elements.voiceStatus.textContent = "Ettelugemine ei ole selles brauseris saadaval.";
     return;
   }
 
   if (!estonianVoice) {
-    elements.voiceStatus.textContent = "🔊 Kõne: eesti häält ei leitud, kasutan lähimat saadaval häält";
+    elements.voiceStatus.textContent = "Eesti häält ei leitud. Rakendus kasutab lähimat saadaval häält.";
     return;
   }
 
-  const lang = estonianVoice.lang || "";
-  const isEstonian = lang.toLowerCase().startsWith("et");
-
-  if (isEstonian) {
-    elements.voiceStatus.textContent = `🔊 Kõne: eesti hääl valmis (${estonianVoice.name})`;
+  if (estonianVoice.lang?.toLowerCase().startsWith("et")) {
+    elements.voiceStatus.textContent = `Ettelugemine kasutab eesti häält: ${estonianVoice.name}`;
     return;
   }
 
-  elements.voiceStatus.textContent = `🔊 Kõne: kasutan varuhäält (${estonianVoice.name})`;
+  elements.voiceStatus.textContent = `Ettelugemine kasutab varuhäält: ${estonianVoice.name}`;
 }
 
 function bindWakeLockEvents() {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && currentMode === "game") {
+    if (document.visibilityState === "visible") {
       requestWakeLock();
-    } else if (document.visibilityState !== "visible") {
+    } else {
       releaseWakeLock();
     }
   });
 }
 
 async function requestWakeLock() {
-  if (!("wakeLock" in navigator) || currentMode !== "game") {
-    elements.wakeLockStatus.hidden = true;
+  if (!("wakeLock" in navigator) || adminOpen || state.isCompleted || !state.steps.length) {
     return;
   }
 
   if (wakeLock) {
-    elements.wakeLockStatus.hidden = false;
     return;
   }
 
   try {
     wakeLock = await navigator.wakeLock.request("screen");
-    elements.wakeLockStatus.hidden = false;
     wakeLock.addEventListener("release", () => {
-      elements.wakeLockStatus.hidden = true;
+      wakeLock = null;
     });
   } catch (error) {
-    elements.wakeLockStatus.hidden = true;
     console.warn("Wake lock ei õnnestunud:", error);
   }
 }
@@ -332,7 +368,6 @@ async function releaseWakeLock() {
     console.warn("Wake lock vabastamine ebaõnnestus:", error);
   } finally {
     wakeLock = null;
-    elements.wakeLockStatus.hidden = true;
   }
 }
 
@@ -348,48 +383,33 @@ async function installApp() {
   if (outcome === "accepted") {
     elements.installHint.textContent = "Paigaldus käivitatud. Otsi rakendust avaekraanilt.";
   } else {
-    elements.installHint.textContent = "Paigaldus jäeti praegu vahele. Saad selle hiljem uuesti teha.";
+    elements.installHint.textContent = "Paigaldus jäeti praegu vahele.";
   }
 
   deferredInstallPrompt = null;
   elements.installButton.hidden = true;
 }
 
-function switchMode(mode) {
-  if (mode !== "admin" && mode !== "game") {
-    return;
-  }
-
-  currentMode = mode;
-  stopSpeaking();
-  renderMode();
-
-  if (mode === "game") {
-    renderGameView();
-    requestWakeLock();
-    queueAutoSpeak();
-  } else {
-    releaseWakeLock();
-  }
-}
-
 function render() {
-  renderMode();
+  renderHero();
+  renderAdminPanelState();
   renderAdmin();
   renderGameView();
 }
 
-function renderMode() {
-  document.querySelectorAll("[data-mode-switch]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.modeSwitch === currentMode);
-  });
+function renderHero() {
+  elements.heroTitle.textContent = state.huntTitle || DEFAULT_TITLE;
+}
 
-  elements.adminPanel.classList.toggle("is-visible", currentMode === "admin");
-  elements.gamePanel.classList.toggle("is-visible", currentMode === "game");
+function renderAdminPanelState() {
+  elements.adminPanel.hidden = !adminOpen;
+  elements.toggleAdminButton.setAttribute("aria-expanded", String(adminOpen));
+  elements.toggleAdminButton.textContent = adminOpen ? "Peida vanema seaded" : "Vanema seaded";
 }
 
 function renderAdmin() {
   elements.huntTitleInput.value = state.huntTitle;
+  elements.eggCountInput.value = state.eggCount;
   elements.stepsList.innerHTML = "";
   elements.adminEmptyState.hidden = state.steps.length !== 0;
 
@@ -398,7 +418,6 @@ function renderAdmin() {
     const card = fragment.querySelector(".step-card");
 
     card.dataset.stepId = step.id;
-
     fragment.querySelector(".step-badge").textContent = `Vihje ${index + 1}`;
     fragment.querySelector(".step-heading").textContent = step.title.trim() || `Samm ${index + 1}`;
 
@@ -444,9 +463,7 @@ function renderAdmin() {
     moveDownButton.dataset.action = "move-down";
     moveDownButton.disabled = index === state.steps.length - 1;
 
-    const deleteButton = fragment.querySelector(".delete-step-button");
-    deleteButton.dataset.action = "delete";
-
+    fragment.querySelector(".delete-step-button").dataset.action = "delete";
     elements.stepsList.appendChild(fragment);
   });
 }
@@ -454,24 +471,23 @@ function renderAdmin() {
 function renderGameView() {
   const hasSteps = state.steps.length > 0;
   const currentStep = hasSteps ? state.steps[state.currentStepIndex] : null;
-  const isCompleted = hasSteps && state.isCompleted;
 
   elements.gameEmptyState.hidden = hasSteps;
-  elements.gameView.hidden = !hasSteps || isCompleted;
-  elements.endScreen.hidden = !isCompleted;
+  elements.gameView.hidden = !hasSteps || state.isCompleted;
+  elements.endScreen.hidden = !hasSteps || !state.isCompleted;
 
   if (!hasSteps) {
     return;
   }
 
-  if (isCompleted) {
-    elements.endTitle.textContent = "Tubli! Kõik munad on leitud! 🐰🥚🎉";
-    elements.endCopy.textContent = `${state.huntTitle || DEFAULT_TITLE} on nüüd rõõmsalt lõpuni mängitud.`;
+  if (state.isCompleted) {
+    elements.endTitle.textContent = `Tubli! Kõik ${state.eggCount} muna on leitud! 🐰🥚🎉`;
+    elements.endCopy.textContent = `${state.huntTitle || DEFAULT_TITLE} sai rõõmsalt läbi.`;
     return;
   }
 
   elements.progressChip.textContent = `Vihje ${state.currentStepIndex + 1} / ${state.steps.length}`;
-  elements.gameTitle.textContent = state.huntTitle;
+  elements.eggCountChip.textContent = `Mune kokku ${state.eggCount}`;
   elements.clueText.textContent = currentStep?.hintText.trim() || "Vihje ootab veel kirjutamist. 🌷";
   elements.clueImageWrap.hidden = !(currentStep?.showImage && currentStep.imageDataUrl);
 
@@ -483,7 +499,39 @@ function renderGameView() {
     elements.clueImage.alt = "";
   }
 
-  document.getElementById("previousButton").hidden = state.currentStepIndex === 0;
+  elements.previousButton.hidden = state.currentStepIndex === 0;
+}
+
+function toggleAdminPanel() {
+  if (adminOpen) {
+    closeAdminPanel();
+  } else {
+    openAdminPanel();
+  }
+}
+
+function openAdminPanel() {
+  adminOpen = true;
+  stopSpeaking();
+  releaseWakeLock();
+  renderAdminPanelState();
+  window.setTimeout(() => {
+    elements.adminPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 20);
+}
+
+function closeAdminPanel() {
+  adminOpen = false;
+  renderAdminPanelState();
+  requestWakeLock();
+}
+
+function handleEggCountChange(event) {
+  const normalizedEggCount = normalizeEggCount(event.target.value, 0);
+  state.eggCount = normalizedEggCount;
+  event.target.value = normalizedEggCount;
+  saveState("Munade arv salvestati 🥚");
+  renderGameView();
 }
 
 function handleStepInput(event) {
@@ -503,11 +551,11 @@ function handleStepInput(event) {
   step[field] = event.target.value;
 
   if (field === "title") {
-    const heading = card.querySelector(".step-heading");
-    heading.textContent = step.title.trim() || "Nimetu vihje";
+    card.querySelector(".step-heading").textContent = step.title.trim() || "Nimetu vihje";
   }
 
   saveState("Muudatus salvestati 🌼");
+  renderHero();
   renderGameView();
 }
 
@@ -560,8 +608,7 @@ function handleStepActions(event) {
   }
 
   const card = actionButton.closest(".step-card");
-  const stepId = card?.dataset.stepId;
-  const stepIndex = state.steps.findIndex((step) => step.id === stepId);
+  const stepIndex = state.steps.findIndex((step) => step.id === card?.dataset.stepId);
 
   if (stepIndex === -1) {
     return;
@@ -613,17 +660,19 @@ function addStep() {
 }
 
 function clearAllData() {
-  const shouldClear = window.confirm("Kas soovid kõik vihjed ja pealkirja tühjendada?");
+  const shouldClear = window.confirm("Kas soovid pealkirja, munade arvu ja kõik vihjed tühjendada?");
 
   if (!shouldClear) {
     return;
   }
 
   state.huntTitle = DEFAULT_TITLE;
+  state.eggCount = 0;
   state.steps = [];
   state.currentStepIndex = 0;
   state.isCompleted = false;
   stopSpeaking();
+  releaseWakeLock();
   saveState("Kõik andmed tühjendati");
   render();
 }
@@ -632,8 +681,11 @@ function startGameFromBeginning() {
   state.currentStepIndex = 0;
   state.isCompleted = false;
   saveState("Mäng alustati algusest 🥚");
-  switchMode("game");
+  closeAdminPanel();
   renderGameView();
+  requestWakeLock();
+  queueAutoSpeak();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function advanceGame() {
@@ -645,6 +697,7 @@ function advanceGame() {
 
   if (state.currentStepIndex >= state.steps.length - 1) {
     state.isCompleted = true;
+    releaseWakeLock();
   } else {
     state.currentStepIndex += 1;
   }
@@ -664,6 +717,7 @@ function goToPreviousStep() {
   state.isCompleted = false;
   saveState("Liikusid eelmise vihje juurde");
   renderGameView();
+  requestWakeLock();
   queueAutoSpeak();
 }
 
@@ -672,7 +726,7 @@ function queueAutoSpeak() {
     window.clearTimeout(autoSpeakTimeoutId);
   }
 
-  if (currentMode !== "game" || state.isCompleted || !state.steps.length) {
+  if (adminOpen || state.isCompleted || !state.steps.length) {
     return;
   }
 
@@ -743,11 +797,6 @@ function normalizeCurrentStepIndex() {
   }
 
   state.isCompleted = false;
-}
-
-function extractChildName(title) {
-  const cleanTitle = title.replace(/munajaht/gi, "").replace(/[🐰🥚🌷🐣✨🌼🎉]/g, "").trim();
-  return cleanTitle || "tubli otsija";
 }
 
 async function registerServiceWorker() {
