@@ -71,6 +71,20 @@
         <button id="toggleAdminButton" class="mini-button parent-button" type="button" aria-expanded="false" aria-controls="adminPanel">Vanema seaded</button>
       </section>
 
+      <section id="passwordOverlay" class="password-overlay" hidden>
+        <div class="card password-card" role="dialog" aria-modal="true" aria-labelledby="passwordTitle">
+          <h2 id="passwordTitle">Vanema seaded</h2>
+          <p class="helper-text">Sisesta parool, et avada seaded.</p>
+          <label class="field-label" for="passwordInput">Parool</label>
+          <input id="passwordInput" class="text-input" type="password" autocomplete="current-password" placeholder="Sisesta parool">
+          <p id="passwordError" class="password-error" aria-live="polite"></p>
+          <div class="password-actions">
+            <button id="passwordSubmitButton" class="pill-button primary-button" type="button">Ava seaded</button>
+            <button id="passwordCancelButton" class="mini-button" type="button">Loobu</button>
+          </div>
+        </div>
+      </section>
+
       <section class="panel panel-admin" id="adminPanel" aria-labelledby="adminHeading" hidden>
         <div class="panel-heading admin-heading">
           <h2 id="adminHeading">Vanema seaded</h2>

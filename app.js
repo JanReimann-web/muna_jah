@@ -14,6 +14,7 @@ const STORAGE_KEY = "munajaht-pwa-data-v2";
 const LEGACY_STORAGE_KEYS = ["munajaht-pwa-data-v1"];
 const VOICE_CHECK_DELAY = 200;
 const DEFAULT_TITLE = "Robini munajaht 🐰";
+const ADMIN_PASSWORD = "Munajaht2026";
 
 function makeId() {
   if (window.crypto?.randomUUID) {
@@ -77,6 +78,11 @@ const elements = {
   endTitle: document.querySelector("#endScreen h3"),
   endCopy: document.querySelector("#endScreen .end-copy"),
   toggleAdminButton: document.getElementById("toggleAdminButton"),
+  passwordOverlay: document.getElementById("passwordOverlay"),
+  passwordInput: document.getElementById("passwordInput"),
+  passwordError: document.getElementById("passwordError"),
+  passwordSubmitButton: document.getElementById("passwordSubmitButton"),
+  passwordCancelButton: document.getElementById("passwordCancelButton"),
   closeAdminButton: document.getElementById("closeAdminButton"),
   adminPanel: document.getElementById("adminPanel"),
   huntTitleInput: document.getElementById("huntTitleInput"),
@@ -219,7 +225,14 @@ function showSaveStatus(message) {
 }
 
 function bindTopLevelEvents() {
-  elements.toggleAdminButton.addEventListener("click", toggleAdminPanel);
+  elements.toggleAdminButton.addEventListener("click", handleParentSettingsTap);
+  elements.passwordSubmitButton.addEventListener("click", submitPassword);
+  elements.passwordCancelButton.addEventListener("click", closePasswordPrompt);
+  elements.passwordInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      submitPassword();
+    }
+  });
   elements.closeAdminButton.addEventListener("click", closeAdminPanel);
 
   elements.huntTitleInput.addEventListener("input", (event) => {
@@ -393,6 +406,7 @@ async function installApp() {
 function render() {
   renderHero();
   renderAdminPanelState();
+  closePasswordPrompt();
   renderAdmin();
   renderGameView();
 }
@@ -508,6 +522,48 @@ function toggleAdminPanel() {
   } else {
     openAdminPanel();
   }
+}
+
+function handleParentSettingsTap() {
+  if (adminOpen) {
+    closeAdminPanel();
+    return;
+  }
+
+  openPasswordPrompt();
+}
+
+function openPasswordPrompt() {
+  stopSpeaking();
+  releaseWakeLock();
+  elements.passwordOverlay.hidden = false;
+  elements.passwordError.textContent = "";
+  elements.passwordInput.value = "";
+  window.setTimeout(() => {
+    elements.passwordInput.focus();
+  }, 30);
+}
+
+function closePasswordPrompt(shouldResumeWakeLock = true) {
+  elements.passwordOverlay.hidden = true;
+  elements.passwordError.textContent = "";
+  elements.passwordInput.value = "";
+
+  if (shouldResumeWakeLock && !adminOpen) {
+    requestWakeLock();
+  }
+}
+
+function submitPassword() {
+  if (elements.passwordInput.value === ADMIN_PASSWORD) {
+    closePasswordPrompt(false);
+    openAdminPanel();
+    return;
+  }
+
+  elements.passwordError.textContent = "Vale parool.";
+  elements.passwordInput.focus();
+  elements.passwordInput.select();
 }
 
 function openAdminPanel() {
