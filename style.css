@@ -488,22 +488,110 @@ button:disabled {
 }
 
 .celebration-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   text-align: center;
-  padding: 28px 20px;
+  padding: 34px 22px 30px;
   background:
     radial-gradient(circle at top center, rgba(255,255,255,0.96), transparent 52%),
-    linear-gradient(180deg, rgba(255, 241, 176, 0.95), rgba(255, 214, 228, 0.94));
+    linear-gradient(180deg, rgba(255, 241, 176, 0.98), rgba(255, 214, 228, 0.95));
+}
+
+.celebration-card::before,
+.celebration-card::after {
+  content: "";
+  position: absolute;
+  inset: auto;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.celebration-card::before {
+  width: 220px;
+  height: 220px;
+  top: -70px;
+  left: -40px;
+  background: radial-gradient(circle, rgba(255,255,255,0.62), rgba(255,255,255,0));
+}
+
+.celebration-card::after {
+  width: 260px;
+  height: 260px;
+  right: -80px;
+  bottom: -120px;
+  background: radial-gradient(circle, rgba(255, 252, 208, 0.75), rgba(255, 252, 208, 0));
 }
 
 .celebration-burst {
-  font-size: 1.8rem;
+  position: relative;
+  z-index: 1;
+  font-size: clamp(2rem, 8vw, 3.6rem);
   letter-spacing: 0.15em;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  animation: celebrationPulse 2.4s ease-in-out infinite;
+}
+
+.celebration-card h3,
+.celebration-card .end-copy,
+.celebration-card .pill-button {
+  position: relative;
+  z-index: 1;
+}
+
+.celebration-card h3 {
+  font-size: clamp(1.7rem, 7vw, 2.7rem);
+  margin-bottom: 10px;
+}
+
+.grand-finale {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.grand-finale span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: clamp(1.4rem, 6vw, 2.8rem);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.3);
+}
+
+.grand-finale span:nth-child(1) { --x: -136px; --y: -118px; --delay: 0ms; }
+.grand-finale span:nth-child(2) { --x: -104px; --y: 20px; --delay: 120ms; }
+.grand-finale span:nth-child(3) { --x: -16px; --y: -150px; --delay: 40ms; }
+.grand-finale span:nth-child(4) { --x: 0px; --y: -26px; --delay: 200ms; }
+.grand-finale span:nth-child(5) { --x: 108px; --y: -108px; --delay: 80ms; }
+.grand-finale span:nth-child(6) { --x: 132px; --y: 12px; --delay: 160ms; }
+.grand-finale span:nth-child(7) { --x: 36px; --y: 118px; --delay: 240ms; }
+.grand-finale span:nth-child(8) { --x: -52px; --y: 134px; --delay: 300ms; }
+
+.celebration-card.is-grand {
+  animation: finaleCardPop 1.2s ease-out both;
+}
+
+.celebration-card.is-grand .grand-finale span {
+  animation: grandBurst 1.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--delay);
+}
+
+.celebration-card.is-grand .celebration-burst {
+  animation:
+    celebrationPulse 2.4s ease-in-out infinite,
+    celebrationRise 1s ease-out both;
 }
 
 .save-status {
   min-height: 1.5em;
   font-size: 0.95rem;
+}
+
+.admin-hint {
+  margin-top: 0;
 }
 
 [hidden] {
@@ -548,6 +636,56 @@ button:disabled {
   }
 }
 
+@keyframes celebrationPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes celebrationRise {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.74);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes finaleCardPop {
+  0% {
+    transform: scale(0.92) translateY(22px);
+    opacity: 0;
+  }
+  45% {
+    transform: scale(1.04) translateY(-8px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes grandBurst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1.24) rotate(18deg);
+  }
+}
+
 @media (min-width: 640px) {
   .app-shell {
     padding-left: 22px;
@@ -555,11 +693,12 @@ button:disabled {
   }
 
   .admin-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: start;
   }
 
-  .admin-actions .save-status {
+  .admin-actions .save-status,
+  .admin-actions .admin-hint {
     grid-column: 1 / -1;
   }
 

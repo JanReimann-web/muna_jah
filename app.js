@@ -13,6 +13,9 @@ PWA paigaldamine telefoni avakuvale:
 const STORAGE_KEY = "munajaht-pwa-data-v3";
 const LEGACY_STORAGE_KEYS = ["munajaht-pwa-data-v2", "munajaht-pwa-data-v1"];
 const VOICE_CHECK_DELAY = 200;
+const NEXT_CLUE_DELAY_MS = 60000;
+const EGG_TRANSITION_MS = 1200;
+const QUICK_TEST_EGG_TRANSITION_MS = 420;
 const DEFAULT_TITLE = "Robini munajaht 🐰";
 const ADMIN_PASSWORD = "Munajaht2026";
 
@@ -130,6 +133,7 @@ const elements = {
   eggsList: document.getElementById("eggsList"),
   adminEmptyState: document.getElementById("adminEmptyState"),
   saveButton: document.getElementById("saveButton"),
+  quickTestButton: document.getElementById("quickTestButton"),
   startGameButton: document.getElementById("startGameButton"),
   clearAllButton: document.getElementById("clearAllButton"),
   saveStatus: document.getElementById("saveStatus"),
@@ -148,6 +152,8 @@ let heroTapCount = 0;
 let heroTapResetTimeoutId = null;
 let eggAdvanceTimeoutId = null;
 let isEggAnimating = false;
+let isQuickTestMode = false;
+let audioContext = null;
 
 initialize();
 
@@ -341,9 +347,99 @@ function showSaveStatus(message) {
   }, 2200);
 }
 
+function getCurrentClueDelayMs() {
+  return isQuickTestMode ? 0 : NEXT_CLUE_DELAY_MS;
+}
+
+function getEggTransitionMs() {
+  return isQuickTestMode ? QUICK_TEST_EGG_TRANSITION_MS : EGG_TRANSITION_MS;
+}
+
+function getAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  if (!audioContext) {
+    audioContext = new AudioContextClass();
+  }
+
+  return audioContext;
+}
+
+function primeAudioContext() {
+  const context = getAudioContext();
+
+  if (!context || context.state !== "suspended") {
+    return;
+  }
+
+  context.resume().catch(() => {
+    /* Heliefekt jääb vahele, kui brauser seda hetkel ei luba. */
+  });
+}
+
+function scheduleTone(context, startTime, frequency, duration, volume, type = "triangle") {
+  const oscillator = context.createOscillator();
+  const gainNode = context.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(frequency * 1.015, 40), startTime + duration);
+
+  gainNode.gain.setValueAtTime(0.0001, startTime);
+  gainNode.gain.exponentialRampToValueAtTime(volume, startTime + 0.025);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(context.destination);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.04);
+}
+
+function playCelebrationSound(kind = "egg") {
+  const context = getAudioContext();
+
+  if (!context) {
+    return;
+  }
+
+  const startPlayback = () => {
+    const startTime = context.currentTime + 0.03;
+    const notes = kind === "finale"
+      ? [
+          [659.25, 0, 0.14, 0.042, "triangle"],
+          [783.99, 0.11, 0.16, 0.05, "triangle"],
+          [987.77, 0.23, 0.18, 0.055, "triangle"],
+          [1174.66, 0.38, 0.26, 0.06, "sine"],
+          [1318.51, 0.54, 0.36, 0.07, "sine"]
+        ]
+      : [
+          [740, 0, 0.12, 0.04, "triangle"],
+          [880, 0.09, 0.15, 0.048, "triangle"],
+          [988, 0.19, 0.2, 0.055, "sine"]
+        ];
+
+    notes.forEach(([frequency, offset, duration, volume, type]) => {
+      scheduleTone(context, startTime + offset, frequency, duration, volume, type);
+    });
+  };
+
+  if (context.state === "suspended") {
+    context.resume().then(startPlayback).catch(() => {
+      /* Heliefekt jääb vahele, kui brauser seda hetkel ei luba. */
+    });
+    return;
+  }
+
+  startPlayback();
+}
+
 function primeNextClueCooldown() {
   if (!state.isCompleted && hasNextClueInCurrentEgg() && state.nextClueUnlockAt === 0) {
-    state.nextClueUnlockAt = Date.now() + 60000;
+    state.nextClueUnlockAt = Date.now() + getCurrentClueDelayMs();
     persistStateSilently();
   }
 }
@@ -384,13 +480,14 @@ function bindTopLevelEvents() {
 
   elements.addEggButton.addEventListener("click", addEgg);
   elements.saveButton.addEventListener("click", () => saveState("Kõik muudatused salvestati 🥚"));
-  elements.startGameButton.addEventListener("click", startGameFromBeginning);
+  elements.quickTestButton.addEventListener("click", startQuickTestFlow);
+  elements.startGameButton.addEventListener("click", () => startGameFromBeginning({ quickTest: false }));
   elements.clearAllButton.addEventListener("click", clearAllData);
 
   elements.speakButton.addEventListener("click", () => speakCurrentClue(true));
   elements.nextButton.addEventListener("click", goToNextClue);
   elements.foundButton.addEventListener("click", advanceEgg);
-  elements.playAgainButton.addEventListener("click", startGameFromBeginning);
+  elements.playAgainButton.addEventListener("click", () => startGameFromBeginning({ quickTest: isQuickTestMode }));
 
   elements.eggsList.addEventListener("input", handleAdminInput);
   elements.eggsList.addEventListener("change", handleAdminChange);
@@ -567,6 +664,7 @@ function renderAdmin() {
   elements.huntTitleInput.value = state.huntTitle;
   elements.introTextInput.value = state.introText;
   elements.eggSummary.textContent = `Mune kokku: ${state.eggs.length}`;
+  elements.quickTestButton.textContent = isQuickTestMode ? "Alusta kiirtesti uuesti" : "Alusta kiirtesti";
   elements.eggsList.innerHTML = "";
   elements.adminEmptyState.hidden = state.eggs.length !== 0;
 
@@ -642,6 +740,7 @@ function renderGameView() {
   const currentClue = getCurrentClue();
   const clueCount = currentEgg?.clues.length || 0;
 
+  elements.endScreen.classList.toggle("is-grand", state.isCompleted);
   elements.gameEmptyState.hidden = hasEggs;
   elements.gameView.hidden = !hasEggs || state.isCompleted;
   elements.endScreen.hidden = !hasEggs || !state.isCompleted;
@@ -709,12 +808,12 @@ function hasNextClueInCurrentEgg() {
 }
 
 function armNextClueCooldown() {
-  state.nextClueUnlockAt = hasNextClueInCurrentEgg() ? Date.now() + 60000 : 0;
+  state.nextClueUnlockAt = hasNextClueInCurrentEgg() ? Date.now() + getCurrentClueDelayMs() : 0;
   updateNextClueButton();
 }
 
 function isNextClueLocked() {
-  return hasNextClueInCurrentEgg() && state.nextClueUnlockAt > Date.now();
+  return getCurrentClueDelayMs() > 0 && hasNextClueInCurrentEgg() && state.nextClueUnlockAt > Date.now();
 }
 
 function updateNextClueButton() {
@@ -730,6 +829,12 @@ function updateNextClueButton() {
   }
 
   if (state.isCompleted || !hasNextClueInCurrentEgg()) {
+    elements.nextButton.textContent = "Järgmine vihje";
+    elements.nextButton.disabled = false;
+    return;
+  }
+
+  if (getCurrentClueDelayMs() === 0) {
     elements.nextButton.textContent = "Järgmine vihje";
     elements.nextButton.disabled = false;
     return;
@@ -1061,6 +1166,7 @@ function clearAllData() {
   state.currentClueIndex = 0;
   state.nextClueUnlockAt = 0;
   state.isCompleted = false;
+  isQuickTestMode = false;
   hasSpokenOpeningIntro = false;
   clearEggAnimationState();
   stopSpeaking();
@@ -1069,15 +1175,29 @@ function clearAllData() {
   render();
 }
 
-function startGameFromBeginning() {
+function startQuickTestFlow() {
+  startGameFromBeginning({
+    quickTest: true,
+    statusText: "Kiirtest algas 🐣"
+  });
+}
+
+function startGameFromBeginning(options = {}) {
+  const {
+    quickTest = isQuickTestMode,
+    statusText = "Mäng alustati algusest 🥚"
+  } = options;
+
+  isQuickTestMode = Boolean(quickTest);
   clearEggAnimationState();
   state.currentEggIndex = 0;
   state.currentClueIndex = 0;
   state.nextClueUnlockAt = 0;
   state.isCompleted = false;
   armNextClueCooldown();
-  saveState("Mäng alustati algusest 🥚");
+  saveState(statusText);
   closeAdminPanel();
+  renderAdmin();
   renderGameView();
   requestWakeLock();
   queueAutoSpeak();
@@ -1109,9 +1229,13 @@ function advanceEgg() {
     return;
   }
 
+  const isFinalEgg = state.currentEggIndex >= state.eggs.length - 1;
+
   clearEggAnimationState();
   isEggAnimating = true;
   stopSpeaking();
+  primeAudioContext();
+  playCelebrationSound(isFinalEgg ? "finale" : "egg");
   elements.eggFoundBurst.hidden = false;
   elements.clueCard.classList.add("is-celebrating");
   renderGameView();
@@ -1119,7 +1243,7 @@ function advanceEgg() {
   eggAdvanceTimeoutId = window.setTimeout(() => {
     clearEggAnimationState();
 
-    if (state.currentEggIndex >= state.eggs.length - 1) {
+    if (isFinalEgg) {
       state.isCompleted = true;
       state.nextClueUnlockAt = 0;
       releaseWakeLock();
@@ -1133,9 +1257,9 @@ function advanceEgg() {
 
     renderGameView();
     queueAutoSpeak();
-  }, 1200);
+  }, getEggTransitionMs());
 
-  if (state.currentEggIndex >= state.eggs.length - 1) {
+  if (isFinalEgg) {
     return;
   }
 
