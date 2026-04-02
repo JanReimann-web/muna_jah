@@ -724,8 +724,10 @@ function renderAdmin() {
     const eggCard = fragment.querySelector(".egg-card");
     const cluesList = fragment.querySelector(".clues-list");
     const eggEmptyState = fragment.querySelector(".egg-empty-state");
+    const addClueButton = fragment.querySelector(".add-clue-button");
 
     eggCard.dataset.eggId = egg.id;
+    eggCard.dataset.eggIndex = String(eggIndex);
     fragment.querySelector(".egg-badge").textContent = `Muna ${eggIndex + 1}`;
     fragment.querySelector(".egg-heading").textContent = egg.title.trim() || `Muna ${eggIndex + 1}`;
 
@@ -737,14 +739,22 @@ function renderAdmin() {
     fragment.querySelector(".egg-move-down-button").disabled = eggIndex === state.eggs.length - 1;
 
     eggEmptyState.hidden = egg.clues.length !== 0;
+    addClueButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      addClueToEgg(egg);
+    });
 
     egg.clues.forEach((clue, clueIndex) => {
       const clueFragment = elements.clueCardTemplate.content.cloneNode(true);
       const clueCard = clueFragment.querySelector(".clue-editor");
       const imagePreviewWrap = clueFragment.querySelector(".image-preview-wrap");
       const imagePreview = clueFragment.querySelector(".image-preview");
+      const clueImageInput = clueFragment.querySelector(".clue-image-input");
+      const removeImageButton = clueFragment.querySelector(".remove-image-button");
 
       clueCard.dataset.clueId = clue.id;
+      clueCard.dataset.clueIndex = String(clueIndex);
       clueFragment.querySelector(".clue-badge").textContent = `Vihje ${clueIndex + 1}`;
       clueFragment.querySelector(".clue-heading").textContent = clue.title.trim() || `Vihje ${clueIndex + 1}`;
 
@@ -756,7 +766,7 @@ function renderAdmin() {
       clueHintInput.value = clue.hintText;
       clueHintInput.dataset.field = "clueHint";
 
-      clueFragment.querySelector(".clue-image-input").dataset.field = "clueImage";
+      clueImageInput.dataset.field = "clueImage";
 
       if (clue.imageDataUrl) {
         imagePreviewWrap.hidden = false;
@@ -765,7 +775,7 @@ function renderAdmin() {
         imagePreviewWrap.hidden = true;
       }
 
-      clueFragment.querySelector(".remove-image-button").hidden = !clue.imageDataUrl;
+      removeImageButton.hidden = !clue.imageDataUrl;
 
       const showImageInput = clueFragment.querySelector(".clue-show-image-input");
       showImageInput.checked = clue.showImage;
@@ -778,11 +788,52 @@ function renderAdmin() {
       clueFragment.querySelector(".clue-move-up-button").disabled = clueIndex === 0;
       clueFragment.querySelector(".clue-move-down-button").disabled = clueIndex === egg.clues.length - 1;
 
+      clueImageInput.addEventListener("change", (event) => {
+        event.stopPropagation();
+        handleClueImageSelection(clue, event.target);
+      });
+
+      removeImageButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        clue.imageDataUrl = "";
+        clue.showImage = false;
+        saveState("Pilt eemaldati");
+        renderAdmin();
+        renderGameView();
+      });
+
       cluesList.appendChild(clueFragment);
     });
 
     elements.eggsList.appendChild(fragment);
   });
+}
+
+function addClueToEgg(egg) {
+  egg.clues.push(createClue({ title: `Vihje ${egg.clues.length + 1}` }));
+  saveState("Vihje lisati 🌷");
+  renderAdmin();
+  renderGameView();
+}
+
+function handleClueImageSelection(clue, input) {
+  const [file] = input.files || [];
+
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.addEventListener("load", () => {
+    clue.imageDataUrl = typeof reader.result === "string" ? reader.result : "";
+    saveState("Pilt salvestati 📷");
+    renderAdmin();
+    renderGameView();
+  });
+
+  reader.readAsDataURL(file);
 }
 
 function renderGameView() {
@@ -1102,22 +1153,7 @@ function handleAdminChange(event) {
   }
 
   if (field === "clueImage") {
-    const [file] = event.target.files || [];
-
-    if (!file) {
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.addEventListener("load", () => {
-      clue.imageDataUrl = typeof reader.result === "string" ? reader.result : "";
-      saveState("Pilt salvestati 📷");
-      renderAdmin();
-      renderGameView();
-    });
-
-    reader.readAsDataURL(file);
+    handleClueImageSelection(clue, event.target);
   }
 }
 
@@ -1158,10 +1194,7 @@ function handleAdminClick(event) {
   }
 
   if (event.target.closest(".add-clue-button")) {
-    egg.clues.push(createClue({ title: `Vihje ${egg.clues.length + 1}` }));
-    saveState("Vihje lisati 🌷");
-    renderAdmin();
-    renderGameView();
+    addClueToEgg(egg);
     return;
   }
 
@@ -1216,6 +1249,12 @@ function getEggFromEvent(event) {
     return null;
   }
 
+  const eggIndex = Number.parseInt(eggCard.dataset.eggIndex || "", 10);
+
+  if (Number.isInteger(eggIndex) && state.eggs[eggIndex]) {
+    return state.eggs[eggIndex];
+  }
+
   return state.eggs.find((egg) => egg.id === eggCard.dataset.eggId) || null;
 }
 
@@ -1224,6 +1263,12 @@ function getClueFromEvent(event, egg) {
 
   if (!clueCard || !egg) {
     return null;
+  }
+
+  const clueIndex = Number.parseInt(clueCard.dataset.clueIndex || "", 10);
+
+  if (Number.isInteger(clueIndex) && egg.clues[clueIndex]) {
+    return egg.clues[clueIndex];
   }
 
   return egg.clues.find((clue) => clue.id === clueCard.dataset.clueId) || null;
