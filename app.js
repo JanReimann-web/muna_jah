@@ -100,6 +100,11 @@ const elements = {
   heroTitle: document.getElementById("heroTitle"),
   gameEmptyState: document.getElementById("gameEmptyState"),
   gameView: document.getElementById("gameView"),
+  introScene: document.getElementById("introScene"),
+  introHintText: document.getElementById("introHintText"),
+  introTextPreview: document.getElementById("introTextPreview"),
+  introReplayButton: document.getElementById("introReplayButton"),
+  progressRow: document.getElementById("progressRow"),
   eggFoundBurst: document.getElementById("eggFoundBurst"),
   eggProgressChip: document.getElementById("eggProgressChip"),
   clueProgressChip: document.getElementById("clueProgressChip"),
@@ -111,6 +116,7 @@ const elements = {
   speakButton: document.getElementById("speakButton"),
   nextButton: document.getElementById("nextButton"),
   foundButton: document.getElementById("foundButton"),
+  gameActions: document.getElementById("gameActions"),
   endScreen: document.getElementById("endScreen"),
   endTitle: document.querySelector("#endScreen h3"),
   endCopy: document.querySelector("#endScreen .end-copy"),
@@ -147,6 +153,10 @@ let deferredInstallPrompt = null;
 let wakeLock = null;
 let adminOpen = false;
 let hasSpokenOpeningIntro = false;
+let isOpeningIntroPlaying = false;
+let openingIntroQueueTimeoutId = null;
+let openingIntroStartWatchdogId = null;
+let hasOpeningIntroStarted = false;
 let nextClueCountdownInterval = null;
 let heroTapCount = 0;
 let heroTapResetTimeoutId = null;
@@ -347,6 +357,41 @@ function showSaveStatus(message) {
   }, 2200);
 }
 
+function shouldShowOpeningIntroScene() {
+  return Boolean(
+    state.eggs.length &&
+    state.introText.trim() &&
+    !hasSpokenOpeningIntro &&
+    !state.isCompleted
+  );
+}
+
+function clearOpeningIntroTimers() {
+  if (openingIntroQueueTimeoutId) {
+    window.clearTimeout(openingIntroQueueTimeoutId);
+    openingIntroQueueTimeoutId = null;
+  }
+
+  if (openingIntroStartWatchdogId) {
+    window.clearTimeout(openingIntroStartWatchdogId);
+    openingIntroStartWatchdogId = null;
+  }
+
+  hasOpeningIntroStarted = false;
+}
+
+function cancelOpeningIntroPlayback() {
+  clearOpeningIntroTimers();
+  isOpeningIntroPlaying = false;
+}
+
+function completeOpeningIntro() {
+  cancelOpeningIntroPlayback();
+  hasSpokenOpeningIntro = true;
+  renderGameView();
+  queueAutoSpeak();
+}
+
 function getCurrentClueDelayMs() {
   return isQuickTestMode ? 0 : NEXT_CLUE_DELAY_MS;
 }
@@ -529,11 +574,17 @@ function bindWakeLockEvents() {
 }
 
 function bindOpeningIntroFallback() {
-  elements.gameView.addEventListener("pointerdown", () => {
-    if (!hasSpokenOpeningIntro && !adminOpen && state.introText.trim()) {
-      speakOpeningIntro();
+  const tryStartIntro = () => {
+    if (!shouldShowOpeningIntroScene() || adminOpen || isOpeningIntroPlaying) {
+      return;
     }
-  }, { once: true });
+
+    primeAudioContext();
+    speakOpeningIntro();
+  };
+
+  elements.introScene.addEventListener("pointerdown", tryStartIntro);
+  elements.introReplayButton.addEventListener("click", tryStartIntro);
 }
 
 function updatePreferredVoice() {
@@ -739,11 +790,16 @@ function renderGameView() {
   const currentEgg = getCurrentEgg();
   const currentClue = getCurrentClue();
   const clueCount = currentEgg?.clues.length || 0;
+  const showOpeningIntro = hasEggs && shouldShowOpeningIntroScene() && !adminOpen;
 
   elements.endScreen.classList.toggle("is-grand", state.isCompleted);
   elements.gameEmptyState.hidden = hasEggs;
   elements.gameView.hidden = !hasEggs || state.isCompleted;
   elements.endScreen.hidden = !hasEggs || !state.isCompleted;
+  elements.introScene.hidden = !showOpeningIntro;
+  elements.progressRow.hidden = showOpeningIntro;
+  elements.clueCard.hidden = showOpeningIntro;
+  elements.gameActions.hidden = showOpeningIntro;
 
   if (!hasEggs) {
     updateNextClueButton();
@@ -754,6 +810,21 @@ function renderGameView() {
     updateNextClueButton();
     elements.endTitle.textContent = `Tubli! Kõik ${state.eggs.length} muna on leitud! 🐰🥚🎉`;
     elements.endCopy.textContent = `${state.huntTitle || DEFAULT_TITLE} sai rõõmsalt läbi.`;
+    return;
+  }
+
+  elements.introTextPreview.hidden = !state.introText.trim();
+  elements.introTextPreview.textContent = state.introText.trim();
+  elements.introHintText.textContent = isOpeningIntroPlaying
+    ? "Jänkud loevad sulle praegu tervitust ette..."
+    : "Kuula väikest tervitust. Kui see läbi saab, ilmub esimene vihje.";
+  elements.introReplayButton.textContent = isOpeningIntroPlaying
+    ? "✨ Tervitus käib..."
+    : "🔊 Kuula tervitust";
+  elements.introReplayButton.disabled = isOpeningIntroPlaying;
+
+  if (showOpeningIntro) {
+    elements.eggFoundBurst.hidden = true;
     return;
   }
 
@@ -896,6 +967,7 @@ function handleHeroCardTap() {
 }
 
 function openPasswordPrompt() {
+  cancelOpeningIntroPlayback();
   clearEggAnimationState();
   stopSpeaking();
   releaseWakeLock();
@@ -909,9 +981,11 @@ function closePasswordPrompt(shouldResumeWakeLock = true) {
   elements.passwordOverlay.hidden = true;
   elements.passwordError.textContent = "";
   elements.passwordInput.value = "";
+  renderGameView();
 
   if (shouldResumeWakeLock && !adminOpen) {
     requestWakeLock();
+    queueOpeningIntro();
   }
 }
 
@@ -929,6 +1003,7 @@ function submitPassword() {
 
 function openAdminPanel() {
   adminOpen = true;
+  cancelOpeningIntroPlayback();
   clearEggAnimationState();
   stopSpeaking();
   releaseWakeLock();
@@ -941,7 +1016,9 @@ function openAdminPanel() {
 function closeAdminPanel() {
   adminOpen = false;
   renderAdminPanelState();
+  renderGameView();
   requestWakeLock();
+  queueOpeningIntro();
 }
 
 function addEgg() {
@@ -1168,6 +1245,7 @@ function clearAllData() {
   state.isCompleted = false;
   isQuickTestMode = false;
   hasSpokenOpeningIntro = false;
+  cancelOpeningIntroPlayback();
   clearEggAnimationState();
   stopSpeaking();
   releaseWakeLock();
@@ -1189,7 +1267,9 @@ function startGameFromBeginning(options = {}) {
   } = options;
 
   isQuickTestMode = Boolean(quickTest);
+  cancelOpeningIntroPlayback();
   clearEggAnimationState();
+  hasSpokenOpeningIntro = false;
   state.currentEggIndex = 0;
   state.currentClueIndex = 0;
   state.nextClueUnlockAt = 0;
@@ -1200,6 +1280,7 @@ function startGameFromBeginning(options = {}) {
   renderAdmin();
   renderGameView();
   requestWakeLock();
+  queueOpeningIntro();
   queueAutoSpeak();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1268,12 +1349,16 @@ function advanceEgg() {
 }
 
 function queueOpeningIntro() {
-  if (hasSpokenOpeningIntro || adminOpen || !state.introText.trim() || !elements.passwordOverlay.hidden) {
+  clearOpeningIntroTimers();
+
+  if (!shouldShowOpeningIntroScene() || adminOpen || !elements.passwordOverlay.hidden) {
     return;
   }
 
-  window.setTimeout(() => {
-    if (hasSpokenOpeningIntro || adminOpen || document.visibilityState !== "visible" || !elements.passwordOverlay.hidden) {
+  renderGameView();
+
+  openingIntroQueueTimeoutId = window.setTimeout(() => {
+    if (!shouldShowOpeningIntroScene() || adminOpen || document.visibilityState !== "visible" || !elements.passwordOverlay.hidden) {
       return;
     }
 
@@ -1282,13 +1367,46 @@ function queueOpeningIntro() {
 }
 
 function speakOpeningIntro() {
-  if (hasSpokenOpeningIntro || !state.introText.trim()) {
+  if (!shouldShowOpeningIntroScene() || adminOpen) {
     return;
   }
 
+  if (isOpeningIntroPlaying) {
+    return;
+  }
+
+  stopSpeaking();
+  clearOpeningIntroTimers();
+  isOpeningIntroPlaying = true;
+  hasOpeningIntroStarted = false;
+  renderGameView();
+
+  openingIntroStartWatchdogId = window.setTimeout(() => {
+    if (!isOpeningIntroPlaying || hasOpeningIntroStarted) {
+      return;
+    }
+
+    cancelOpeningIntroPlayback();
+    renderGameView();
+  }, 1800);
+
   speakText(state.introText.trim(), {
     onstart: () => {
-      hasSpokenOpeningIntro = true;
+      hasOpeningIntroStarted = true;
+
+      if (openingIntroStartWatchdogId) {
+        window.clearTimeout(openingIntroStartWatchdogId);
+        openingIntroStartWatchdogId = null;
+      }
+
+      renderGameView();
+    },
+    onend: () => {
+      completeOpeningIntro();
+    },
+    onerror: () => {
+      cancelOpeningIntroPlayback();
+      renderGameView();
     }
   });
 }
@@ -1300,7 +1418,14 @@ function queueAutoSpeak() {
 
   const currentClue = getCurrentClue();
 
-  if (adminOpen || state.isCompleted || !currentClue?.autoSpeak || !currentClue.hintText.trim()) {
+  if (
+    adminOpen ||
+    state.isCompleted ||
+    shouldShowOpeningIntroScene() ||
+    isOpeningIntroPlaying ||
+    !currentClue?.autoSpeak ||
+    !currentClue.hintText.trim()
+  ) {
     return;
   }
 

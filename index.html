@@ -39,7 +39,22 @@
         </div>
 
         <div id="gameView" class="game-view">
-          <div class="progress-row">
+          <section id="introScene" class="card intro-scene" hidden>
+            <div class="intro-orbit" aria-hidden="true">
+              <span>🐰</span>
+              <span>🥚</span>
+              <span>✨</span>
+              <span>🌷</span>
+              <span>🐣</span>
+            </div>
+            <p class="step-badge">Jänkude tervitus</p>
+            <h2 class="intro-title">Seiklus algab kohe ✨</h2>
+            <p id="introHintText" class="intro-copy">Kuula väikest tervitust. Kui see läbi saab, ilmub esimene vihje.</p>
+            <p id="introTextPreview" class="intro-preview"></p>
+            <button id="introReplayButton" class="pill-button primary-button" type="button">🔊 Kuula tervitust</button>
+          </section>
+
+          <div id="progressRow" class="progress-row">
             <div class="progress-chip" id="eggProgressChip">Muna 1 / 1</div>
             <div class="progress-chip progress-chip-soft" id="clueProgressChip">Vihje 1 / 1</div>
           </div>
@@ -60,7 +75,7 @@
             <p id="clueText" class="clue-text"></p>
           </article>
 
-          <div class="game-actions">
+          <div id="gameActions" class="game-actions">
             <button id="speakButton" class="pill-button primary-button" type="button">🔊 Kuula vihjet</button>
             <button id="nextButton" class="mini-button" type="button">➡ Järgmine vihje</button>
             <button id="foundButton" class="pill-button accent-button" type="button">🥚 Leidsin muna</button>

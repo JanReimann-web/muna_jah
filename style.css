@@ -167,6 +167,71 @@ h3 {
   gap: 10px;
 }
 
+.intro-scene {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  text-align: center;
+  padding: 30px 20px 24px;
+  background:
+    radial-gradient(circle at top center, rgba(255,255,255,0.96), transparent 52%),
+    linear-gradient(180deg, rgba(255, 247, 214, 0.98), rgba(255, 229, 239, 0.95));
+}
+
+.intro-scene::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 28px;
+  border: 1px dashed rgba(247, 155, 181, 0.38);
+  pointer-events: none;
+}
+
+.intro-title,
+.intro-copy,
+.intro-preview,
+.intro-scene .pill-button {
+  position: relative;
+  z-index: 1;
+}
+
+.intro-title {
+  font-size: clamp(1.8rem, 7vw, 2.6rem);
+}
+
+.intro-copy,
+.intro-preview {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.intro-preview {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.intro-orbit {
+  position: relative;
+  height: 130px;
+  z-index: 1;
+}
+
+.intro-orbit span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: clamp(1.7rem, 8vw, 2.8rem);
+  transform: translate(-50%, -50%);
+  animation: introFloat 3.2s ease-in-out infinite;
+}
+
+.intro-orbit span:nth-child(1) { --orbit-x: -92px; --orbit-y: -20px; animation-delay: 0ms; }
+.intro-orbit span:nth-child(2) { --orbit-x: -30px; --orbit-y: -68px; animation-delay: 180ms; }
+.intro-orbit span:nth-child(3) { --orbit-x: 0px; --orbit-y: 0px; animation-delay: 80ms; }
+.intro-orbit span:nth-child(4) { --orbit-x: 54px; --orbit-y: -64px; animation-delay: 260ms; }
+.intro-orbit span:nth-child(5) { --orbit-x: 94px; --orbit-y: -6px; animation-delay: 120ms; }
+
 .panel-heading {
   display: flex;
   align-items: center;
@@ -604,6 +669,16 @@ button:disabled {
   }
   to {
     transform: translate3d(0, -125vh, 0) rotate(18deg);
+  }
+}
+
+@keyframes introFloat {
+  0%,
+  100% {
+    transform: translate(calc(-50% + var(--orbit-x)), calc(-50% + var(--orbit-y))) scale(0.96);
+  }
+  50% {
+    transform: translate(calc(-50% + var(--orbit-x)), calc(-50% + var(--orbit-y) - 10px)) scale(1.08);
   }
 }
 
