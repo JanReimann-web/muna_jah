@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f79bb5">
+  <meta name="description" content="Lõbus ja võrguühenduseta töötav munajahi PWA väikesele lapsele.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <title>Munajaht PWA</title>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="floating-emojis" aria-hidden="true">
+      <span>🐰</span>
+      <span>🥚</span>
+      <span>🌷</span>
+      <span>✨</span>
+      <span>🌼</span>
+      <span>🐣</span>
+      <span>🥚</span>
+      <span>✨</span>
+    </div>
+
+    <header class="hero-card">
+      <p class="eyebrow">Kevadine seiklus</p>
+      <h1>Munajaht 🐰🥚</h1>
+      <p class="hero-copy">Valmista vihjed ette ja lase lapsel samm-sammult munad üles leida.</p>
+
+      <div class="hero-tools">
+        <button id="installButton" class="mini-button install-button" type="button" hidden>📲 Installi telefonisse</button>
+        <p id="installHint" class="install-hint">Androidis saad selle lisada avaekraanile ja avada nagu päris rakenduse.</p>
+      </div>
+
+      <nav class="mode-switch" aria-label="Rakenduse vaated">
+        <button class="mode-button is-active" type="button" data-mode-switch="admin">Admin</button>
+        <button class="mode-button" type="button" data-mode-switch="game">Mäng</button>
+      </nav>
+    </header>
+
+    <main class="content-stack">
+      <section class="panel panel-admin is-visible" id="adminPanel" aria-labelledby="adminHeading">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Vanemale</p>
+            <h2 id="adminHeading">Admin 🐣</h2>
+          </div>
+          <p class="section-note">Siin saad kogu munajahi valmis seada ja hiljem muuta.</p>
+        </div>
+
+        <div class="card title-card">
+          <label class="field-label" for="huntTitleInput">Munajahi pealkiri</label>
+          <input id="huntTitleInput" class="text-input" type="text" maxlength="80" placeholder="Sisesta mängu pealkiri">
+          <p class="helper-text">Näiteks: Robini munajaht 🐰</p>
+        </div>
+
+        <div class="section-bar">
+          <h3>Vihjed 🌷</h3>
+          <button id="addStepButton" class="pill-button secondary-button" type="button">Lisa uus vihje</button>
+        </div>
+
+        <div id="adminEmptyState" class="empty-state" hidden>
+          <div class="empty-emoji">🥚</div>
+          <h3>Ühtegi vihjet veel ei ole</h3>
+          <p>Lisa esimene vihje ja ehita munajaht samm-sammult valmis.</p>
+        </div>
+
+        <div id="stepsList" class="steps-list" aria-live="polite"></div>
+
+        <div class="card admin-actions">
+          <button id="saveButton" class="pill-button primary-button" type="button">Salvesta</button>
+          <button id="startGameButton" class="pill-button accent-button" type="button">Alusta mängu algusest</button>
+          <button id="clearAllButton" class="pill-button ghost-button" type="button">Tühjenda kõik</button>
+          <p id="saveStatus" class="save-status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="panel panel-game" id="gamePanel" aria-labelledby="gameHeading">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Lapsele</p>
+            <h2 id="gameHeading">Mäng 🐰</h2>
+          </div>
+          <p class="section-note">Üks vihje korraga, rahulikult ja rõõmsalt.</p>
+        </div>
+
+        <div id="gameEmptyState" class="empty-state" hidden>
+          <div class="empty-emoji">🌼</div>
+          <h3>Munajaht ootab veel vihjeid</h3>
+          <p>Lisa Admin vaatesse vähemalt üks vihje, siis saab mänguga alustada.</p>
+        </div>
+
+        <div id="gameView" class="game-view">
+          <div class="progress-chip" id="progressChip">Vihje 1 / 1</div>
+          <div class="status-strip">
+            <p id="voiceStatus" class="status-pill">🔊 Kõne: kontrollin eesti häält...</p>
+            <p id="wakeLockStatus" class="status-pill" hidden>🌟 Ekraan püsib mängu ajal ärkvel</p>
+          </div>
+          <article class="card clue-card">
+            <p class="clue-title-label">Munajahi pealkiri</p>
+            <h3 id="gameTitle" class="game-title"></h3>
+            <div id="clueImageWrap" class="clue-image-wrap" hidden>
+              <img id="clueImage" class="clue-image" alt="Vihje pilt">
+            </div>
+            <p id="clueText" class="clue-text"></p>
+          </article>
+
+          <div class="game-actions">
+            <button id="speakButton" class="pill-button primary-button" type="button">🔊 Kuula vihjet</button>
+            <button id="foundButton" class="pill-button accent-button" type="button">🥚 Leidsin muna</button>
+            <button id="restartButton" class="mini-button" type="button">⏮ Alusta uuesti</button>
+            <button id="previousButton" class="mini-button" type="button">⬅ Eelmine vihje</button>
+          </div>
+          <p class="game-note">Kui Samsungis eesti hääl puudub, lisa see telefoni kõnesünteesi seadetes ja ava rakendus uuesti.</p>
+        </div>
+
+        <div id="endScreen" class="card celebration-card" hidden>
+          <div class="celebration-burst" aria-hidden="true">🐰🥚🎉✨🌷</div>
+          <h3>Tubli! Kõik munad on leitud! 🐰🥚🎉</h3>
+          <p class="end-copy">Kevadine seiklus sai läbi ja kõik peidetud üllatused leidsid tee üles.</p>
+          <button id="playAgainButton" class="pill-button accent-button" type="button">Mängi uuesti</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="stepCardTemplate">
+    <article class="card step-card">
+      <div class="step-card-header">
+        <div>
+          <p class="step-badge"></p>
+          <h3 class="step-heading"></h3>
+        </div>
+        <div class="step-order-buttons">
+          <button class="mini-button move-up-button" type="button">Liiguta üles</button>
+          <button class="mini-button move-down-button" type="button">Liiguta alla</button>
+        </div>
+      </div>
+
+      <label class="field-label">Pealkiri (ainult vanemale)</label>
+      <input class="text-input step-title-input" type="text" maxlength="60" placeholder="Näiteks: Elutoa vihje">
+
+      <label class="field-label">Vihje tekst</label>
+      <textarea class="text-area step-hint-input" rows="3" maxlength="220" placeholder="Kirjuta vihje eesti keeles"></textarea>
+
+      <label class="field-label">Pilt (valikuline)</label>
+      <input class="file-input step-image-input" type="file" accept="image/*">
+      <div class="image-preview-wrap" hidden>
+        <img class="image-preview" alt="Valitud vihjepildi eelvaade">
+      </div>
+      <button class="mini-button remove-image-button" type="button" hidden>Eemalda pilt</button>
+
+      <label class="checkbox-row">
+        <input class="step-show-image-input" type="checkbox">
+        <span>Näita pilti selles etapis</span>
+      </label>
+
+      <label class="checkbox-row">
+        <input class="step-auto-speak-input" type="checkbox">
+        <span>Loe vihje automaatselt ette</span>
+      </label>
+
+      <div class="step-card-actions">
+        <button class="pill-button ghost-button delete-step-button" type="button">Kustuta</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
