@@ -972,9 +972,7 @@ function renderGameView() {
 
   elements.introTextPreview.hidden = !state.introText.trim();
   elements.introTextPreview.textContent = state.introText.trim();
-  elements.introHintText.textContent = isOpeningIntroPlaying
-    ? "Jänkud loevad sulle praegu tervitust ette..."
-    : "Kuula väikest tervitust. Kui see läbi saab, ilmub esimene vihje.";
+  elements.introHintText.textContent = "Kuula väikest tervitust. Kui see läbi saab, ilmub esimene vihje.";
   elements.introReplayButton.textContent = isOpeningIntroPlaying
     ? "✨ Tervitus käib..."
     : "🔊 Kuula tervitust";
