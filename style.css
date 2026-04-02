@@ -156,6 +156,7 @@ h3 {
 }
 
 .game-view {
+  position: relative;
   display: grid;
   gap: 14px;
 }
@@ -445,6 +446,40 @@ button:disabled {
   padding-top: 22px;
 }
 
+.clue-card.is-celebrating {
+  animation: clueCelebrate 1s ease forwards;
+}
+
+.egg-found-burst {
+  position: absolute;
+  inset: 18px 0 auto;
+  display: block;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.egg-found-burst span {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  font-size: clamp(1.5rem, 7vw, 2.7rem);
+  opacity: 0;
+  transform: translate(-50%, 0) scale(0.4);
+  animation: burstOut 900ms ease-out forwards;
+}
+
+.egg-found-burst span:nth-child(1) { animation-delay: 0ms; }
+.egg-found-burst span:nth-child(2) { animation-delay: 60ms; }
+.egg-found-burst span:nth-child(3) { animation-delay: 120ms; }
+.egg-found-burst span:nth-child(4) { animation-delay: 180ms; }
+.egg-found-burst span:nth-child(5) { animation-delay: 240ms; }
+
+.egg-found-burst span:nth-child(1) { --x: -108px; --y: -18px; }
+.egg-found-burst span:nth-child(2) { --x: -46px; --y: -72px; }
+.egg-found-burst span:nth-child(3) { --x: 0px; --y: -94px; }
+.egg-found-burst span:nth-child(4) { --x: 58px; --y: -70px; }
+.egg-found-burst span:nth-child(5) { --x: 112px; --y: -18px; }
+
 .clue-text {
   margin: 0;
   font-size: clamp(1.4rem, 5.6vw, 2rem);
@@ -481,6 +516,35 @@ button:disabled {
   }
   to {
     transform: translate3d(0, -125vh, 0) rotate(18deg);
+  }
+}
+
+@keyframes burstOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.35);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--x)), var(--y)) scale(1.2);
+  }
+}
+
+@keyframes clueCelebrate {
+  0% {
+    transform: scale(1);
+    box-shadow: var(--shadow-soft);
+  }
+  35% {
+    transform: scale(1.02) rotate(-1deg);
+    box-shadow: 0 22px 44px rgba(234, 111, 150, 0.24);
+  }
+  100% {
+    transform: scale(0.98) translateY(-6px);
+    box-shadow: 0 18px 40px rgba(255, 216, 111, 0.24);
   }
 }
 
