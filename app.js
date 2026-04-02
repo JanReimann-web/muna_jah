@@ -75,6 +75,7 @@ const elements = {
   clueImageWrap: document.getElementById("clueImageWrap"),
   clueImage: document.getElementById("clueImage"),
   previousButton: document.getElementById("previousButton"),
+  nextButton: document.getElementById("nextButton"),
   endScreen: document.getElementById("endScreen"),
   endTitle: document.querySelector("#endScreen h3"),
   endCopy: document.querySelector("#endScreen .end-copy"),
@@ -262,6 +263,7 @@ function bindTopLevelEvents() {
   elements.foundButton.addEventListener("click", advanceGame);
   elements.restartButton.addEventListener("click", startGameFromBeginning);
   elements.previousButton.addEventListener("click", goToPreviousStep);
+  elements.nextButton.addEventListener("click", goToNextStep);
   elements.playAgainButton.addEventListener("click", startGameFromBeginning);
   elements.installButton.addEventListener("click", installApp);
 
@@ -524,6 +526,7 @@ function renderGameView() {
   }
 
   elements.previousButton.hidden = state.currentStepIndex === 0;
+  elements.nextButton.hidden = state.currentStepIndex >= state.steps.length - 1;
 }
 
 function toggleAdminPanel() {
@@ -811,6 +814,25 @@ function goToPreviousStep() {
   saveState("Liikusid eelmise vihje juurde");
   renderGameView();
   requestWakeLock();
+  queueAutoSpeak();
+}
+
+function goToNextStep() {
+  if (!state.steps.length || state.isCompleted) {
+    return;
+  }
+
+  stopSpeaking();
+
+  if (state.currentStepIndex >= state.steps.length - 1) {
+    state.isCompleted = true;
+    releaseWakeLock();
+  } else {
+    state.currentStepIndex += 1;
+  }
+
+  saveState("Liikusid järgmise vihje juurde");
+  renderGameView();
   queueAutoSpeak();
 }
 
