@@ -103,7 +103,8 @@ img {
 }
 
 .eyebrow,
-.step-badge {
+.step-badge,
+.clue-title-label {
   margin: 0 0 6px;
   font-size: 0.84rem;
   font-weight: 800;
@@ -114,7 +115,8 @@ img {
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   font-family: "Comic Sans MS", "Trebuchet MS", "Segoe UI", cursive;
   line-height: 1;
@@ -261,9 +263,52 @@ h3 {
   gap: 14px;
 }
 
+.eggs-list,
+.clues-list {
+  display: grid;
+  gap: 14px;
+}
+
 .step-card {
   display: grid;
   gap: 12px;
+}
+
+.egg-card {
+  display: grid;
+  gap: 14px;
+}
+
+.egg-clue-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.egg-empty-state {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.clue-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 250, 252, 0.82);
+  border: 1px solid rgba(247, 155, 181, 0.18);
+}
+
+.clue-editor-header {
+  align-items: center;
+}
+
+.clue-heading {
+  font-size: 1.15rem;
 }
 
 .step-card-header {

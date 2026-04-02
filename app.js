@@ -1,8 +1,8 @@
 /*
 Vanemale:
-1. Ava lehe allosas "Vanema seaded".
-2. Pane paika pealkiri, munade koguarv ja vihjed.
-3. Vajuta "Alusta mängu algusest", et peita seaded ja alustada uuesti esimesest vihjest.
+1. Ava lehe allosas "Vanema seaded" ja sisesta parool.
+2. Lisa munad ning igale munale nii palju vihjeid kui soovid.
+3. Vajuta "Alusta mängu algusest", et peita seaded ja alustada lapsega jahti.
 
 PWA paigaldamine telefoni avakuvale:
 1. Ava rakendus telefonis brauseris.
@@ -10,8 +10,8 @@ PWA paigaldamine telefoni avakuvale:
 3. Pärast esmast avamist töötab rakendus ka võrguühenduseta.
 */
 
-const STORAGE_KEY = "munajaht-pwa-data-v2";
-const LEGACY_STORAGE_KEYS = ["munajaht-pwa-data-v1"];
+const STORAGE_KEY = "munajaht-pwa-data-v3";
+const LEGACY_STORAGE_KEYS = ["munajaht-pwa-data-v2", "munajaht-pwa-data-v1"];
 const VOICE_CHECK_DELAY = 200;
 const DEFAULT_TITLE = "Robini munajaht 🐰";
 const ADMIN_PASSWORD = "Munajaht2026";
@@ -21,44 +21,71 @@ function makeId() {
     return window.crypto.randomUUID();
   }
 
-  return `step-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function cloneData(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function createClue(overrides = {}) {
+  return {
+    id: makeId(),
+    title: "",
+    hintText: "",
+    imageDataUrl: "",
+    showImage: false,
+    autoSpeak: true,
+    ...overrides
+  };
+}
+
+function createEgg(index = 1, overrides = {}, withStarterClue = true) {
+  return {
+    id: makeId(),
+    title: `Muna ${index}`,
+    clues: withStarterClue ? [createClue({ title: "Esimene vihje" })] : [],
+    ...overrides
+  };
+}
+
 const defaultState = {
   huntTitle: DEFAULT_TITLE,
-  eggCount: 3,
   introText: "Tere, Robin! Nii tore, et avasid munajahi rakenduse. Pühadejänkud on jätnud sulle vahvad vihjed. Kuula hoolikalt, leia munad üles ja tunne rõõmu sellest seiklusest!",
-  steps: [
-    {
-      id: makeId(),
-      title: "Esimene vihje",
-      hintText: "Vaata sinna, kus vahel jalanõud puhkavad. 👟",
-      imageDataUrl: "",
-      showImage: false,
-      autoSpeak: true
-    },
-    {
-      id: makeId(),
-      title: "Teine vihje",
-      hintText: "Proovi otsida koha lähedalt, kus aknast õue vaadatakse. 🪟",
-      imageDataUrl: "",
-      showImage: false,
-      autoSpeak: true
-    },
-    {
-      id: makeId(),
-      title: "Viimane vihje",
-      hintText: "Viimane üllatus võib olla seal, kus midagi pehmet ja mõnusat ootab. 🛋️",
-      imageDataUrl: "",
-      showImage: false,
-      autoSpeak: true
-    }
+  eggs: [
+    createEgg(1, {
+      title: "Muna 1",
+      clues: [
+        createClue({
+          title: "Esimene vihje",
+          hintText: "Vaata sinna, kus vahel jalanõud puhkavad. 👟",
+          autoSpeak: true
+        })
+      ]
+    }),
+    createEgg(2, {
+      title: "Muna 2",
+      clues: [
+        createClue({
+          title: "Teine vihje",
+          hintText: "Proovi otsida koha lähedalt, kus aknast õue vaadatakse. 🪟",
+          autoSpeak: true
+        })
+      ]
+    }),
+    createEgg(3, {
+      title: "Muna 3",
+      clues: [
+        createClue({
+          title: "Viimane vihje",
+          hintText: "Viimane üllatus võib olla seal, kus midagi pehmet ja mõnusat ootab. 🛋️",
+          autoSpeak: true
+        })
+      ]
+    })
   ],
-  currentStepIndex: 0,
+  currentEggIndex: 0,
+  currentClueIndex: 0,
   isCompleted: false
 };
 
@@ -66,46 +93,47 @@ const state = loadState();
 
 const elements = {
   heroTitle: document.getElementById("heroTitle"),
-  gamePanel: document.getElementById("gamePanel"),
   gameEmptyState: document.getElementById("gameEmptyState"),
   gameView: document.getElementById("gameView"),
-  progressChip: document.getElementById("progressChip"),
-  eggCountChip: document.getElementById("eggCountChip"),
+  eggProgressChip: document.getElementById("eggProgressChip"),
+  clueProgressChip: document.getElementById("clueProgressChip"),
+  gameEggTitle: document.getElementById("gameEggTitle"),
   clueText: document.getElementById("clueText"),
   clueImageWrap: document.getElementById("clueImageWrap"),
   clueImage: document.getElementById("clueImage"),
+  speakButton: document.getElementById("speakButton"),
   previousButton: document.getElementById("previousButton"),
   nextButton: document.getElementById("nextButton"),
+  foundButton: document.getElementById("foundButton"),
+  restartButton: document.getElementById("restartButton"),
   endScreen: document.getElementById("endScreen"),
   endTitle: document.querySelector("#endScreen h3"),
   endCopy: document.querySelector("#endScreen .end-copy"),
+  playAgainButton: document.getElementById("playAgainButton"),
   toggleAdminButton: document.getElementById("toggleAdminButton"),
   passwordOverlay: document.getElementById("passwordOverlay"),
   passwordInput: document.getElementById("passwordInput"),
   passwordError: document.getElementById("passwordError"),
   passwordSubmitButton: document.getElementById("passwordSubmitButton"),
   passwordCancelButton: document.getElementById("passwordCancelButton"),
-  closeAdminButton: document.getElementById("closeAdminButton"),
   adminPanel: document.getElementById("adminPanel"),
+  closeAdminButton: document.getElementById("closeAdminButton"),
   huntTitleInput: document.getElementById("huntTitleInput"),
-  eggCountInput: document.getElementById("eggCountInput"),
   introTextInput: document.getElementById("introTextInput"),
+  eggSummary: document.getElementById("eggSummary"),
   voiceStatus: document.getElementById("voiceStatus"),
   installTools: document.getElementById("installTools"),
   installButton: document.getElementById("installButton"),
   installHint: document.getElementById("installHint"),
-  addStepButton: document.getElementById("addStepButton"),
+  addEggButton: document.getElementById("addEggButton"),
+  eggsList: document.getElementById("eggsList"),
+  adminEmptyState: document.getElementById("adminEmptyState"),
   saveButton: document.getElementById("saveButton"),
   startGameButton: document.getElementById("startGameButton"),
   clearAllButton: document.getElementById("clearAllButton"),
-  stepsList: document.getElementById("stepsList"),
-  adminEmptyState: document.getElementById("adminEmptyState"),
   saveStatus: document.getElementById("saveStatus"),
-  speakButton: document.getElementById("speakButton"),
-  foundButton: document.getElementById("foundButton"),
-  restartButton: document.getElementById("restartButton"),
-  playAgainButton: document.getElementById("playAgainButton"),
-  stepCardTemplate: document.getElementById("stepCardTemplate")
+  eggCardTemplate: document.getElementById("eggCardTemplate"),
+  clueCardTemplate: document.getElementById("clueCardTemplate")
 };
 
 let estonianVoice = null;
@@ -122,6 +150,7 @@ function initialize() {
   bindInstallPrompt();
   bindSpeechVoices();
   bindWakeLockEvents();
+  bindOpeningIntroFallback();
   registerServiceWorker();
   render();
   requestWakeLock();
@@ -157,60 +186,130 @@ function loadLegacyState() {
 }
 
 function sanitizeState(rawState) {
-  const steps = Array.isArray(rawState?.steps)
-    ? rawState.steps.map(sanitizeStep).filter(Boolean)
-    : [];
+  const eggs = Array.isArray(rawState?.eggs)
+    ? rawState.eggs.map(sanitizeEgg).filter(Boolean)
+    : migrateLegacyEggs(rawState);
 
   const safeState = {
     huntTitle: typeof rawState?.huntTitle === "string" && rawState.huntTitle.trim()
       ? rawState.huntTitle.trim()
       : DEFAULT_TITLE,
-    eggCount: normalizeEggCount(rawState?.eggCount, steps.length),
-    introText: typeof rawState?.introText === "string" ? rawState.introText : defaultState.introText,
-    steps,
-    currentStepIndex: Number.isInteger(rawState?.currentStepIndex) ? rawState.currentStepIndex : 0,
+    introText: typeof rawState?.introText === "string"
+      ? rawState.introText
+      : defaultState.introText,
+    eggs,
+    currentEggIndex: Number.isInteger(rawState?.currentEggIndex)
+      ? rawState.currentEggIndex
+      : Number.isInteger(rawState?.currentStepIndex) ? rawState.currentStepIndex : 0,
+    currentClueIndex: Number.isInteger(rawState?.currentClueIndex) ? rawState.currentClueIndex : 0,
     isCompleted: Boolean(rawState?.isCompleted)
   };
 
-  if (safeState.currentStepIndex < 0) {
-    safeState.currentStepIndex = 0;
-  }
-
-  if (safeState.currentStepIndex >= safeState.steps.length && safeState.steps.length > 0) {
-    safeState.currentStepIndex = safeState.steps.length - 1;
-  }
-
-  if (safeState.steps.length === 0) {
-    safeState.currentStepIndex = 0;
-    safeState.isCompleted = false;
-  }
-
+  normalizeProgress(safeState);
   return safeState;
 }
 
-function sanitizeStep(step, index = 0) {
-  if (!step || typeof step !== "object") {
+function migrateLegacyEggs(rawState) {
+  if (!Array.isArray(rawState?.steps) || rawState.steps.length === 0) {
+    return cloneData(defaultState.eggs);
+  }
+
+  const eggs = rawState.steps
+    .map((step, index) => {
+      const clue = sanitizeClue(step, index);
+
+      if (!clue) {
+        return null;
+      }
+
+      return createEgg(index + 1, {
+        title: clue.title?.trim() || `Muna ${index + 1}`,
+        clues: [clue]
+      });
+    })
+    .filter(Boolean);
+
+  const targetEggCount = normalizeCount(rawState?.eggCount, eggs.length);
+
+  while (eggs.length < targetEggCount) {
+    eggs.push(createEgg(eggs.length + 1, {}, false));
+  }
+
+  return eggs.length ? eggs : cloneData(defaultState.eggs);
+}
+
+function sanitizeEgg(egg, index = 0) {
+  if (!egg || typeof egg !== "object") {
+    return null;
+  }
+
+  const clues = Array.isArray(egg.clues)
+    ? egg.clues.map(sanitizeClue).filter(Boolean)
+    : [];
+
+  return {
+    id: typeof egg.id === "string" && egg.id ? egg.id : makeId(),
+    title: typeof egg.title === "string" && egg.title.trim() ? egg.title : `Muna ${index + 1}`,
+    clues
+  };
+}
+
+function sanitizeClue(clue, index = 0) {
+  if (!clue || typeof clue !== "object") {
     return null;
   }
 
   return {
-    id: typeof step.id === "string" && step.id ? step.id : `step-${Date.now()}-${index}`,
-    title: typeof step.title === "string" ? step.title : "",
-    hintText: typeof step.hintText === "string" ? step.hintText : "",
-    imageDataUrl: typeof step.imageDataUrl === "string" ? step.imageDataUrl : "",
-    showImage: Boolean(step.showImage),
-    autoSpeak: Boolean(step.autoSpeak)
+    id: typeof clue.id === "string" && clue.id ? clue.id : makeId(),
+    title: typeof clue.title === "string" ? clue.title : `Vihje ${index + 1}`,
+    hintText: typeof clue.hintText === "string" ? clue.hintText : "",
+    imageDataUrl: typeof clue.imageDataUrl === "string" ? clue.imageDataUrl : "",
+    showImage: Boolean(clue.showImage),
+    autoSpeak: Boolean(clue.autoSpeak)
   };
 }
 
-function normalizeEggCount(value, minimum = 0) {
+function normalizeCount(value, minimum = 0) {
   const parsed = Number.parseInt(value, 10);
 
   if (!Number.isFinite(parsed)) {
-    return Math.max(minimum, minimum || 0);
+    return minimum;
   }
 
   return Math.max(minimum, parsed);
+}
+
+function normalizeProgress(targetState = state) {
+  if (!targetState.eggs.length) {
+    targetState.currentEggIndex = 0;
+    targetState.currentClueIndex = 0;
+    targetState.isCompleted = false;
+    return;
+  }
+
+  if (targetState.currentEggIndex < 0) {
+    targetState.currentEggIndex = 0;
+  }
+
+  if (targetState.currentEggIndex >= targetState.eggs.length) {
+    targetState.currentEggIndex = targetState.eggs.length - 1;
+  }
+
+  const currentEgg = targetState.eggs[targetState.currentEggIndex];
+
+  if (!currentEgg || currentEgg.clues.length === 0) {
+    targetState.currentClueIndex = 0;
+    targetState.isCompleted = false;
+    return;
+  }
+
+  if (targetState.currentClueIndex < 0) {
+    targetState.currentClueIndex = 0;
+  }
+
+  if (targetState.currentClueIndex >= currentEgg.clues.length) {
+    targetState.currentClueIndex = currentEgg.clues.length - 1;
+  }
 }
 
 function saveState(statusText = "Salvestatud 🌷") {
@@ -239,37 +338,35 @@ function bindTopLevelEvents() {
       submitPassword();
     }
   });
-  elements.closeAdminButton.addEventListener("click", closeAdminPanel);
 
+  elements.closeAdminButton.addEventListener("click", closeAdminPanel);
   elements.huntTitleInput.addEventListener("input", (event) => {
     state.huntTitle = event.target.value.trimStart();
     saveState("Pealkiri salvestati ✨");
     renderHero();
     renderGameView();
   });
-
-  elements.eggCountInput.addEventListener("change", handleEggCountChange);
-  elements.eggCountInput.addEventListener("blur", handleEggCountChange);
   elements.introTextInput.addEventListener("input", (event) => {
     state.introText = event.target.value;
     saveState("Tervitusjutt salvestati ✨");
   });
+  elements.installButton.addEventListener("click", installApp);
 
-  elements.addStepButton.addEventListener("click", addStep);
+  elements.addEggButton.addEventListener("click", addEgg);
   elements.saveButton.addEventListener("click", () => saveState("Kõik muudatused salvestati 🥚"));
   elements.startGameButton.addEventListener("click", startGameFromBeginning);
   elements.clearAllButton.addEventListener("click", clearAllData);
-  elements.speakButton.addEventListener("click", () => speakCurrentStep(true));
-  elements.foundButton.addEventListener("click", advanceGame);
-  elements.restartButton.addEventListener("click", startGameFromBeginning);
-  elements.previousButton.addEventListener("click", goToPreviousStep);
-  elements.nextButton.addEventListener("click", goToNextStep);
-  elements.playAgainButton.addEventListener("click", startGameFromBeginning);
-  elements.installButton.addEventListener("click", installApp);
 
-  elements.stepsList.addEventListener("input", handleStepInput);
-  elements.stepsList.addEventListener("change", handleStepChange);
-  elements.stepsList.addEventListener("click", handleStepActions);
+  elements.speakButton.addEventListener("click", () => speakCurrentClue(true));
+  elements.previousButton.addEventListener("click", goToPreviousClue);
+  elements.nextButton.addEventListener("click", goToNextClue);
+  elements.foundButton.addEventListener("click", advanceEgg);
+  elements.restartButton.addEventListener("click", startGameFromBeginning);
+  elements.playAgainButton.addEventListener("click", startGameFromBeginning);
+
+  elements.eggsList.addEventListener("input", handleAdminInput);
+  elements.eggsList.addEventListener("change", handleAdminChange);
+  elements.eggsList.addEventListener("click", handleAdminClick);
 }
 
 function bindInstallPrompt() {
@@ -293,6 +390,25 @@ function bindSpeechVoices() {
     window.speechSynthesis.addEventListener("voiceschanged", updatePreferredVoice);
     window.setTimeout(updatePreferredVoice, VOICE_CHECK_DELAY);
   }
+}
+
+function bindWakeLockEvents() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      requestWakeLock();
+      queueOpeningIntro();
+    } else {
+      releaseWakeLock();
+    }
+  });
+}
+
+function bindOpeningIntroFallback() {
+  elements.gameView.addEventListener("pointerdown", () => {
+    if (!hasSpokenOpeningIntro && !adminOpen && state.introText.trim()) {
+      speakOpeningIntro();
+    }
+  }, { once: true });
 }
 
 function updatePreferredVoice() {
@@ -352,18 +468,8 @@ function updateVoiceStatus() {
   elements.voiceStatus.textContent = `Ettelugemine kasutab varuhäält: ${estonianVoice.name}`;
 }
 
-function bindWakeLockEvents() {
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      requestWakeLock();
-    } else {
-      releaseWakeLock();
-    }
-  });
-}
-
 async function requestWakeLock() {
-  if (!("wakeLock" in navigator) || adminOpen || state.isCompleted || !state.steps.length) {
+  if (!("wakeLock" in navigator) || adminOpen || state.isCompleted || !state.eggs.length) {
     return;
   }
 
@@ -417,7 +523,6 @@ async function installApp() {
 function render() {
   renderHero();
   renderAdminPanelState();
-  closePasswordPrompt();
   renderAdmin();
   renderGameView();
 }
@@ -434,107 +539,138 @@ function renderAdminPanelState() {
 
 function renderAdmin() {
   elements.huntTitleInput.value = state.huntTitle;
-  elements.eggCountInput.value = state.eggCount;
   elements.introTextInput.value = state.introText;
-  elements.stepsList.innerHTML = "";
-  elements.adminEmptyState.hidden = state.steps.length !== 0;
+  elements.eggSummary.textContent = `Mune kokku: ${state.eggs.length}`;
+  elements.eggsList.innerHTML = "";
+  elements.adminEmptyState.hidden = state.eggs.length !== 0;
 
-  state.steps.forEach((step, index) => {
-    const fragment = elements.stepCardTemplate.content.cloneNode(true);
-    const card = fragment.querySelector(".step-card");
+  state.eggs.forEach((egg, eggIndex) => {
+    const fragment = elements.eggCardTemplate.content.cloneNode(true);
+    const eggCard = fragment.querySelector(".egg-card");
+    const cluesList = fragment.querySelector(".clues-list");
+    const eggEmptyState = fragment.querySelector(".egg-empty-state");
 
-    card.dataset.stepId = step.id;
-    fragment.querySelector(".step-badge").textContent = `Vihje ${index + 1}`;
-    fragment.querySelector(".step-heading").textContent = step.title.trim() || `Samm ${index + 1}`;
+    eggCard.dataset.eggId = egg.id;
+    fragment.querySelector(".egg-badge").textContent = `Muna ${eggIndex + 1}`;
+    fragment.querySelector(".egg-heading").textContent = egg.title.trim() || `Muna ${eggIndex + 1}`;
 
-    const titleInput = fragment.querySelector(".step-title-input");
-    titleInput.value = step.title;
-    titleInput.dataset.field = "title";
+    const eggTitleInput = fragment.querySelector(".egg-title-input");
+    eggTitleInput.value = egg.title;
+    eggTitleInput.dataset.field = "eggTitle";
 
-    const hintInput = fragment.querySelector(".step-hint-input");
-    hintInput.value = step.hintText;
-    hintInput.dataset.field = "hintText";
+    fragment.querySelector(".egg-move-up-button").disabled = eggIndex === 0;
+    fragment.querySelector(".egg-move-down-button").disabled = eggIndex === state.eggs.length - 1;
 
-    const fileInput = fragment.querySelector(".step-image-input");
-    fileInput.dataset.field = "imageDataUrl";
+    eggEmptyState.hidden = egg.clues.length !== 0;
 
-    const previewWrap = fragment.querySelector(".image-preview-wrap");
-    const previewImage = fragment.querySelector(".image-preview");
+    egg.clues.forEach((clue, clueIndex) => {
+      const clueFragment = elements.clueCardTemplate.content.cloneNode(true);
+      const clueCard = clueFragment.querySelector(".clue-editor");
+      const imagePreviewWrap = clueFragment.querySelector(".image-preview-wrap");
+      const imagePreview = clueFragment.querySelector(".image-preview");
 
-    if (step.imageDataUrl) {
-      previewWrap.hidden = false;
-      previewImage.src = step.imageDataUrl;
-    } else {
-      previewWrap.hidden = true;
-      previewImage.removeAttribute("src");
-    }
+      clueCard.dataset.clueId = clue.id;
+      clueFragment.querySelector(".clue-badge").textContent = `Vihje ${clueIndex + 1}`;
+      clueFragment.querySelector(".clue-heading").textContent = clue.title.trim() || `Vihje ${clueIndex + 1}`;
 
-    const removeImageButton = fragment.querySelector(".remove-image-button");
-    removeImageButton.hidden = !step.imageDataUrl;
-    removeImageButton.dataset.action = "remove-image";
+      const clueTitleInput = clueFragment.querySelector(".clue-title-input");
+      clueTitleInput.value = clue.title;
+      clueTitleInput.dataset.field = "clueTitle";
 
-    const showImageInput = fragment.querySelector(".step-show-image-input");
-    showImageInput.checked = step.showImage;
-    showImageInput.dataset.field = "showImage";
+      const clueHintInput = clueFragment.querySelector(".clue-hint-input");
+      clueHintInput.value = clue.hintText;
+      clueHintInput.dataset.field = "clueHint";
 
-    const autoSpeakInput = fragment.querySelector(".step-auto-speak-input");
-    autoSpeakInput.checked = step.autoSpeak;
-    autoSpeakInput.dataset.field = "autoSpeak";
+      clueFragment.querySelector(".clue-image-input").dataset.field = "clueImage";
 
-    const moveUpButton = fragment.querySelector(".move-up-button");
-    moveUpButton.dataset.action = "move-up";
-    moveUpButton.disabled = index === 0;
+      if (clue.imageDataUrl) {
+        imagePreviewWrap.hidden = false;
+        imagePreview.src = clue.imageDataUrl;
+      } else {
+        imagePreviewWrap.hidden = true;
+      }
 
-    const moveDownButton = fragment.querySelector(".move-down-button");
-    moveDownButton.dataset.action = "move-down";
-    moveDownButton.disabled = index === state.steps.length - 1;
+      clueFragment.querySelector(".remove-image-button").hidden = !clue.imageDataUrl;
 
-    fragment.querySelector(".delete-step-button").dataset.action = "delete";
-    elements.stepsList.appendChild(fragment);
+      const showImageInput = clueFragment.querySelector(".clue-show-image-input");
+      showImageInput.checked = clue.showImage;
+      showImageInput.dataset.field = "clueShowImage";
+
+      const autoSpeakInput = clueFragment.querySelector(".clue-auto-speak-input");
+      autoSpeakInput.checked = clue.autoSpeak;
+      autoSpeakInput.dataset.field = "clueAutoSpeak";
+
+      clueFragment.querySelector(".clue-move-up-button").disabled = clueIndex === 0;
+      clueFragment.querySelector(".clue-move-down-button").disabled = clueIndex === egg.clues.length - 1;
+
+      cluesList.appendChild(clueFragment);
+    });
+
+    elements.eggsList.appendChild(fragment);
   });
 }
 
 function renderGameView() {
-  const hasSteps = state.steps.length > 0;
-  const currentStep = hasSteps ? state.steps[state.currentStepIndex] : null;
+  const hasEggs = state.eggs.length > 0;
+  const currentEgg = getCurrentEgg();
+  const currentClue = getCurrentClue();
+  const clueCount = currentEgg?.clues.length || 0;
 
-  elements.gameEmptyState.hidden = hasSteps;
-  elements.gameView.hidden = !hasSteps || state.isCompleted;
-  elements.endScreen.hidden = !hasSteps || !state.isCompleted;
+  elements.gameEmptyState.hidden = hasEggs;
+  elements.gameView.hidden = !hasEggs || state.isCompleted;
+  elements.endScreen.hidden = !hasEggs || !state.isCompleted;
 
-  if (!hasSteps) {
+  if (!hasEggs) {
     return;
   }
 
   if (state.isCompleted) {
-    elements.endTitle.textContent = `Tubli! Kõik ${state.eggCount} muna on leitud! 🐰🥚🎉`;
+    elements.endTitle.textContent = `Tubli! Kõik ${state.eggs.length} muna on leitud! 🐰🥚🎉`;
     elements.endCopy.textContent = `${state.huntTitle || DEFAULT_TITLE} sai rõõmsalt läbi.`;
     return;
   }
 
-  elements.progressChip.textContent = `Vihje ${state.currentStepIndex + 1} / ${state.steps.length}`;
-  elements.eggCountChip.textContent = `Mune kokku ${state.eggCount}`;
-  elements.clueText.textContent = currentStep?.hintText.trim() || "Vihje ootab veel kirjutamist. 🌷";
-  elements.clueImageWrap.hidden = !(currentStep?.showImage && currentStep.imageDataUrl);
+  elements.eggProgressChip.textContent = `Muna ${state.currentEggIndex + 1} / ${state.eggs.length}`;
+  elements.clueProgressChip.textContent = `Vihje ${clueCount ? state.currentClueIndex + 1 : 0} / ${clueCount}`;
+  elements.gameEggTitle.textContent = currentEgg?.title?.trim() || `Muna ${state.currentEggIndex + 1}`;
 
-  if (currentStep?.showImage && currentStep.imageDataUrl) {
-    elements.clueImage.src = currentStep.imageDataUrl;
-    elements.clueImage.alt = `Vihje pilt etapile ${state.currentStepIndex + 1}`;
+  if (!currentClue) {
+    elements.clueText.textContent = "Selle muna vihje ootab veel lisamist. 🌷";
+    elements.clueImageWrap.hidden = true;
+    elements.speakButton.disabled = true;
+    elements.previousButton.hidden = true;
+    elements.nextButton.hidden = true;
+    return;
+  }
+
+  elements.speakButton.disabled = !currentClue.hintText.trim();
+  elements.clueText.textContent = currentClue.hintText.trim() || "Selle vihje tekst ootab veel kirjutamist. 🌷";
+  elements.clueImageWrap.hidden = !(currentClue.showImage && currentClue.imageDataUrl);
+
+  if (currentClue.showImage && currentClue.imageDataUrl) {
+    elements.clueImage.src = currentClue.imageDataUrl;
+    elements.clueImage.alt = `Vihje pilt munale ${state.currentEggIndex + 1}`;
   } else {
     elements.clueImage.removeAttribute("src");
     elements.clueImage.alt = "";
   }
 
-  elements.previousButton.hidden = state.currentStepIndex === 0;
-  elements.nextButton.hidden = state.currentStepIndex >= state.steps.length - 1;
+  elements.previousButton.hidden = state.currentClueIndex === 0;
+  elements.nextButton.hidden = state.currentClueIndex >= clueCount - 1;
 }
 
-function toggleAdminPanel() {
-  if (adminOpen) {
-    closeAdminPanel();
-  } else {
-    openAdminPanel();
+function getCurrentEgg() {
+  return state.eggs[state.currentEggIndex] || null;
+}
+
+function getCurrentClue() {
+  const egg = getCurrentEgg();
+
+  if (!egg || egg.clues.length === 0) {
+    return null;
   }
+
+  return egg.clues[state.currentClueIndex] || null;
 }
 
 function handleParentSettingsTap() {
@@ -552,9 +688,7 @@ function openPasswordPrompt() {
   elements.passwordOverlay.hidden = false;
   elements.passwordError.textContent = "";
   elements.passwordInput.value = "";
-  window.setTimeout(() => {
-    elements.passwordInput.focus();
-  }, 30);
+  window.setTimeout(() => elements.passwordInput.focus(), 20);
 }
 
 function closePasswordPrompt(shouldResumeWakeLock = true) {
@@ -595,12 +729,294 @@ function closeAdminPanel() {
   requestWakeLock();
 }
 
-function handleEggCountChange(event) {
-  const normalizedEggCount = normalizeEggCount(event.target.value, 0);
-  state.eggCount = normalizedEggCount;
-  event.target.value = normalizedEggCount;
-  saveState("Munade arv salvestati 🥚");
+function addEgg() {
+  state.eggs.push(createEgg(state.eggs.length + 1));
+  saveState("Uus muna lisati 🥚");
+  renderAdmin();
   renderGameView();
+}
+
+function handleAdminInput(event) {
+  const egg = getEggFromEvent(event);
+
+  if (!egg) {
+    return;
+  }
+
+  const field = event.target.dataset.field;
+
+  if (field === "eggTitle") {
+    egg.title = event.target.value;
+    const heading = event.target.closest(".egg-card")?.querySelector(".egg-heading");
+
+    if (heading) {
+      heading.textContent = egg.title.trim() || "Nimetu muna";
+    }
+
+    saveState("Muna nimi salvestati 🌼");
+    renderGameView();
+    return;
+  }
+
+  const clue = getClueFromEvent(event, egg);
+
+  if (!clue) {
+    return;
+  }
+
+  if (field === "clueTitle") {
+    clue.title = event.target.value;
+    const heading = event.target.closest(".clue-editor")?.querySelector(".clue-heading");
+
+    if (heading) {
+      heading.textContent = clue.title.trim() || "Nimetu vihje";
+    }
+  }
+
+  if (field === "clueHint") {
+    clue.hintText = event.target.value;
+  }
+
+  saveState("Muudatus salvestati 🌼");
+  renderGameView();
+}
+
+function handleAdminChange(event) {
+  const egg = getEggFromEvent(event);
+
+  if (!egg) {
+    return;
+  }
+
+  const clue = getClueFromEvent(event, egg);
+
+  if (!clue) {
+    return;
+  }
+
+  const field = event.target.dataset.field;
+
+  if (field === "clueShowImage") {
+    clue.showImage = event.target.checked;
+    saveState("Valik salvestati 🐣");
+    renderGameView();
+    return;
+  }
+
+  if (field === "clueAutoSpeak") {
+    clue.autoSpeak = event.target.checked;
+    saveState("Valik salvestati 🐣");
+    return;
+  }
+
+  if (field === "clueImage") {
+    const [file] = event.target.files || [];
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.addEventListener("load", () => {
+      clue.imageDataUrl = typeof reader.result === "string" ? reader.result : "";
+      saveState("Pilt salvestati 📷");
+      renderAdmin();
+      renderGameView();
+    });
+
+    reader.readAsDataURL(file);
+  }
+}
+
+function handleAdminClick(event) {
+  const egg = getEggFromEvent(event);
+
+  if (!egg) {
+    return;
+  }
+
+  const eggIndex = state.eggs.findIndex((item) => item.id === egg.id);
+
+  if (event.target.closest(".egg-move-up-button") && eggIndex > 0) {
+    [state.eggs[eggIndex - 1], state.eggs[eggIndex]] = [state.eggs[eggIndex], state.eggs[eggIndex - 1]];
+    normalizeProgress();
+    saveState("Muna liigutati üles");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  if (event.target.closest(".egg-move-down-button") && eggIndex < state.eggs.length - 1) {
+    [state.eggs[eggIndex], state.eggs[eggIndex + 1]] = [state.eggs[eggIndex + 1], state.eggs[eggIndex]];
+    normalizeProgress();
+    saveState("Muna liigutati alla");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  if (event.target.closest(".delete-egg-button")) {
+    state.eggs.splice(eggIndex, 1);
+    normalizeProgress();
+    saveState("Muna kustutati");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  if (event.target.closest(".add-clue-button")) {
+    egg.clues.push(createClue({ title: `Vihje ${egg.clues.length + 1}` }));
+    saveState("Vihje lisati 🌷");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  const clue = getClueFromEvent(event, egg);
+
+  if (!clue) {
+    return;
+  }
+
+  const clueIndex = egg.clues.findIndex((item) => item.id === clue.id);
+
+  if (event.target.closest(".clue-move-up-button") && clueIndex > 0) {
+    [egg.clues[clueIndex - 1], egg.clues[clueIndex]] = [egg.clues[clueIndex], egg.clues[clueIndex - 1]];
+    normalizeProgress();
+    saveState("Vihje liigutati üles");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  if (event.target.closest(".clue-move-down-button") && clueIndex < egg.clues.length - 1) {
+    [egg.clues[clueIndex], egg.clues[clueIndex + 1]] = [egg.clues[clueIndex + 1], egg.clues[clueIndex]];
+    normalizeProgress();
+    saveState("Vihje liigutati alla");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  if (event.target.closest(".delete-clue-button")) {
+    egg.clues.splice(clueIndex, 1);
+    normalizeProgress();
+    saveState("Vihje kustutati");
+    renderAdmin();
+    renderGameView();
+    return;
+  }
+
+  if (event.target.closest(".remove-image-button")) {
+    clue.imageDataUrl = "";
+    clue.showImage = false;
+    saveState("Pilt eemaldati");
+    renderAdmin();
+    renderGameView();
+  }
+}
+
+function getEggFromEvent(event) {
+  const eggCard = event.target.closest(".egg-card");
+
+  if (!eggCard) {
+    return null;
+  }
+
+  return state.eggs.find((egg) => egg.id === eggCard.dataset.eggId) || null;
+}
+
+function getClueFromEvent(event, egg) {
+  const clueCard = event.target.closest(".clue-editor");
+
+  if (!clueCard || !egg) {
+    return null;
+  }
+
+  return egg.clues.find((clue) => clue.id === clueCard.dataset.clueId) || null;
+}
+
+function clearAllData() {
+  const shouldClear = window.confirm("Kas soovid pealkirja, tervitusjutu, kõik munad ja kõik vihjed tühjendada?");
+
+  if (!shouldClear) {
+    return;
+  }
+
+  state.huntTitle = DEFAULT_TITLE;
+  state.introText = "";
+  state.eggs = [];
+  state.currentEggIndex = 0;
+  state.currentClueIndex = 0;
+  state.isCompleted = false;
+  hasSpokenOpeningIntro = false;
+  stopSpeaking();
+  releaseWakeLock();
+  saveState("Kõik andmed tühjendati");
+  render();
+}
+
+function startGameFromBeginning() {
+  state.currentEggIndex = 0;
+  state.currentClueIndex = 0;
+  state.isCompleted = false;
+  saveState("Mäng alustati algusest 🥚");
+  closeAdminPanel();
+  renderGameView();
+  requestWakeLock();
+  queueAutoSpeak();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function goToPreviousClue() {
+  const currentEgg = getCurrentEgg();
+
+  if (!currentEgg || state.currentClueIndex <= 0) {
+    return;
+  }
+
+  stopSpeaking();
+  state.currentClueIndex -= 1;
+  state.isCompleted = false;
+  saveState("Liikusid eelmise vihje juurde");
+  renderGameView();
+  queueAutoSpeak();
+}
+
+function goToNextClue() {
+  const currentEgg = getCurrentEgg();
+
+  if (!currentEgg || state.currentClueIndex >= currentEgg.clues.length - 1) {
+    return;
+  }
+
+  stopSpeaking();
+  state.currentClueIndex += 1;
+  state.isCompleted = false;
+  saveState("Liikusid järgmise vihje juurde");
+  renderGameView();
+  queueAutoSpeak();
+}
+
+function advanceEgg() {
+  if (!state.eggs.length || state.isCompleted) {
+    return;
+  }
+
+  stopSpeaking();
+
+  if (state.currentEggIndex >= state.eggs.length - 1) {
+    state.isCompleted = true;
+    releaseWakeLock();
+  } else {
+    state.currentEggIndex += 1;
+    state.currentClueIndex = 0;
+  }
+
+  saveState("Liikusid järgmise muna juurde ✨");
+  renderGameView();
+  queueAutoSpeak();
 }
 
 function queueOpeningIntro() {
@@ -629,242 +1045,31 @@ function speakOpeningIntro() {
   });
 }
 
-function handleStepInput(event) {
-  const card = event.target.closest(".step-card");
-
-  if (!card) {
-    return;
-  }
-
-  const field = event.target.dataset.field;
-  const step = state.steps.find((item) => item.id === card.dataset.stepId);
-
-  if (!step || !field || field === "imageDataUrl") {
-    return;
-  }
-
-  step[field] = event.target.value;
-
-  if (field === "title") {
-    card.querySelector(".step-heading").textContent = step.title.trim() || "Nimetu vihje";
-  }
-
-  saveState("Muudatus salvestati 🌼");
-  renderHero();
-  renderGameView();
-}
-
-function handleStepChange(event) {
-  const card = event.target.closest(".step-card");
-
-  if (!card) {
-    return;
-  }
-
-  const field = event.target.dataset.field;
-  const step = state.steps.find((item) => item.id === card.dataset.stepId);
-
-  if (!step) {
-    return;
-  }
-
-  if (field === "showImage" || field === "autoSpeak") {
-    step[field] = event.target.checked;
-    saveState("Valik salvestati 🐣");
-    renderGameView();
-    return;
-  }
-
-  if (field === "imageDataUrl") {
-    const [file] = event.target.files || [];
-
-    if (!file) {
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.addEventListener("load", () => {
-      step.imageDataUrl = typeof reader.result === "string" ? reader.result : "";
-      saveState("Pilt salvestati 📷");
-      renderAdmin();
-      renderGameView();
-    });
-
-    reader.readAsDataURL(file);
-  }
-}
-
-function handleStepActions(event) {
-  const actionButton = event.target.closest("[data-action]");
-
-  if (!actionButton) {
-    return;
-  }
-
-  const card = actionButton.closest(".step-card");
-  const stepIndex = state.steps.findIndex((step) => step.id === card?.dataset.stepId);
-
-  if (stepIndex === -1) {
-    return;
-  }
-
-  const action = actionButton.dataset.action;
-
-  if (action === "delete") {
-    state.steps.splice(stepIndex, 1);
-    normalizeCurrentStepIndex();
-    saveState("Vihje kustutati");
-  }
-
-  if (action === "remove-image") {
-    state.steps[stepIndex].imageDataUrl = "";
-    state.steps[stepIndex].showImage = false;
-    saveState("Pilt eemaldati");
-  }
-
-  if (action === "move-up" && stepIndex > 0) {
-    [state.steps[stepIndex - 1], state.steps[stepIndex]] = [state.steps[stepIndex], state.steps[stepIndex - 1]];
-    normalizeCurrentStepIndex();
-    saveState("Vihje liigutati üles");
-  }
-
-  if (action === "move-down" && stepIndex < state.steps.length - 1) {
-    [state.steps[stepIndex], state.steps[stepIndex + 1]] = [state.steps[stepIndex + 1], state.steps[stepIndex]];
-    normalizeCurrentStepIndex();
-    saveState("Vihje liigutati alla");
-  }
-
-  renderAdmin();
-  renderGameView();
-}
-
-function addStep() {
-  state.steps.push({
-    id: makeId(),
-    title: `Uus vihje ${state.steps.length + 1}`,
-    hintText: "",
-    imageDataUrl: "",
-    showImage: false,
-    autoSpeak: true
-  });
-
-  saveState("Uus vihje lisati 🐰");
-  renderAdmin();
-  renderGameView();
-}
-
-function clearAllData() {
-  const shouldClear = window.confirm("Kas soovid pealkirja, munade arvu ja kõik vihjed tühjendada?");
-
-  if (!shouldClear) {
-    return;
-  }
-
-  state.huntTitle = DEFAULT_TITLE;
-  state.eggCount = 0;
-  state.introText = "";
-  state.steps = [];
-  state.currentStepIndex = 0;
-  state.isCompleted = false;
-  stopSpeaking();
-  releaseWakeLock();
-  saveState("Kõik andmed tühjendati");
-  render();
-}
-
-function startGameFromBeginning() {
-  state.currentStepIndex = 0;
-  state.isCompleted = false;
-  saveState("Mäng alustati algusest 🥚");
-  closeAdminPanel();
-  renderGameView();
-  requestWakeLock();
-  queueAutoSpeak();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function advanceGame() {
-  if (!state.steps.length || state.isCompleted) {
-    return;
-  }
-
-  stopSpeaking();
-
-  if (state.currentStepIndex >= state.steps.length - 1) {
-    state.isCompleted = true;
-    releaseWakeLock();
-  } else {
-    state.currentStepIndex += 1;
-  }
-
-  saveState("Järgmine samm avati ✨");
-  renderGameView();
-  queueAutoSpeak();
-}
-
-function goToPreviousStep() {
-  if (state.currentStepIndex <= 0) {
-    return;
-  }
-
-  stopSpeaking();
-  state.currentStepIndex -= 1;
-  state.isCompleted = false;
-  saveState("Liikusid eelmise vihje juurde");
-  renderGameView();
-  requestWakeLock();
-  queueAutoSpeak();
-}
-
-function goToNextStep() {
-  if (!state.steps.length || state.isCompleted) {
-    return;
-  }
-
-  stopSpeaking();
-
-  if (state.currentStepIndex >= state.steps.length - 1) {
-    state.isCompleted = true;
-    releaseWakeLock();
-  } else {
-    state.currentStepIndex += 1;
-  }
-
-  saveState("Liikusid järgmise vihje juurde");
-  renderGameView();
-  queueAutoSpeak();
-}
-
 function queueAutoSpeak() {
   if (autoSpeakTimeoutId) {
     window.clearTimeout(autoSpeakTimeoutId);
   }
 
-  if (adminOpen || state.isCompleted || !state.steps.length) {
-    return;
-  }
+  const currentClue = getCurrentClue();
 
-  const currentStep = state.steps[state.currentStepIndex];
-
-  if (!currentStep?.autoSpeak || !currentStep.hintText.trim()) {
+  if (adminOpen || state.isCompleted || !currentClue?.autoSpeak || !currentClue.hintText.trim()) {
     return;
   }
 
   autoSpeakTimeoutId = window.setTimeout(() => {
-    speakCurrentStep(false);
+    speakCurrentClue(false);
   }, 300);
 }
 
-function speakCurrentStep(forceReplay) {
-  const currentStep = state.steps[state.currentStepIndex];
+function speakCurrentClue(forceReplay) {
+  const currentClue = getCurrentClue();
 
-  if (!currentStep || !currentStep.hintText.trim()) {
+  if (!currentClue || !currentClue.hintText.trim()) {
     showSaveStatus("Vihje tekst puudub.");
     return;
   }
 
-  speakText(currentStep.hintText, { forceReplay });
+  speakText(currentClue.hintText.trim(), { forceReplay });
 }
 
 function speakText(text, options = {}) {
@@ -912,24 +1117,6 @@ function stopSpeaking() {
     window.clearTimeout(autoSpeakTimeoutId);
     autoSpeakTimeoutId = null;
   }
-}
-
-function normalizeCurrentStepIndex() {
-  if (state.steps.length === 0) {
-    state.currentStepIndex = 0;
-    state.isCompleted = false;
-    return;
-  }
-
-  if (state.currentStepIndex >= state.steps.length) {
-    state.currentStepIndex = state.steps.length - 1;
-  }
-
-  if (state.currentStepIndex < 0) {
-    state.currentStepIndex = 0;
-  }
-
-  state.isCompleted = false;
 }
 
 async function registerServiceWorker() {

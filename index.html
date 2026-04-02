@@ -40,11 +40,12 @@
 
         <div id="gameView" class="game-view">
           <div class="progress-row">
-            <div class="progress-chip" id="progressChip">Vihje 1 / 1</div>
-            <div class="progress-chip progress-chip-soft" id="eggCountChip">Mune kokku 1</div>
+            <div class="progress-chip" id="eggProgressChip">Muna 1 / 1</div>
+            <div class="progress-chip progress-chip-soft" id="clueProgressChip">Vihje 1 / 1</div>
           </div>
 
           <article class="card clue-card">
+            <p id="gameEggTitle" class="clue-title-label">Muna 1</p>
             <div id="clueImageWrap" class="clue-image-wrap" hidden>
               <img id="clueImage" class="clue-image" alt="Vihje pilt">
             </div>
@@ -53,10 +54,10 @@
 
           <div class="game-actions">
             <button id="speakButton" class="pill-button primary-button" type="button">🔊 Kuula vihjet</button>
-            <button id="foundButton" class="pill-button accent-button" type="button">🥚 Leidsin muna</button>
-            <button id="restartButton" class="mini-button" type="button">⏮ Alusta uuesti</button>
             <button id="previousButton" class="mini-button" type="button">⬅ Eelmine vihje</button>
             <button id="nextButton" class="mini-button" type="button">➡ Järgmine vihje</button>
+            <button id="foundButton" class="pill-button accent-button" type="button">🥚 Leidsin muna</button>
+            <button id="restartButton" class="mini-button" type="button">⏮ Alusta uuesti</button>
           </div>
         </div>
 
@@ -96,13 +97,10 @@
           <label class="field-label" for="huntTitleInput">Munajahi pealkiri</label>
           <input id="huntTitleInput" class="text-input" type="text" maxlength="80" placeholder="Näiteks: Robini munajaht 🐰">
 
-          <label class="field-label" for="eggCountInput">Munade arv kokku</label>
-          <input id="eggCountInput" class="text-input" type="number" inputmode="numeric" min="0" step="1" placeholder="Näiteks 8">
-
           <label class="field-label" for="introTextInput">Tervitusjutt rakenduse avamisel</label>
           <textarea id="introTextInput" class="text-area" rows="4" maxlength="500" placeholder="Näiteks: Tere, Robin! Nii tore, et avasid munajahi rakenduse..."></textarea>
 
-          <p class="helper-text">Vihjeid ja mune saad lisada nii palju kui soovid.</p>
+          <p id="eggSummary" class="helper-text">Mune kokku: 0</p>
           <p id="voiceStatus" class="helper-text"></p>
 
           <div id="installTools" class="install-tools" hidden>
@@ -112,17 +110,17 @@
         </div>
 
         <div class="section-bar">
-          <h3>Vihjed 🌷</h3>
-          <button id="addStepButton" class="pill-button secondary-button" type="button">Lisa uus vihje</button>
+          <h3>Munad 🥚</h3>
+          <button id="addEggButton" class="pill-button secondary-button" type="button">Lisa muna</button>
         </div>
 
         <div id="adminEmptyState" class="empty-state" hidden>
           <div class="empty-emoji">🥚</div>
-          <h3>Ühtegi vihjet veel ei ole</h3>
-          <p>Lisa esimene vihje ja munajaht saab alata.</p>
+          <h3>Ühtegi muna veel ei ole</h3>
+          <p>Lisa esimene muna ja selle sisse vihjed.</p>
         </div>
 
-        <div id="stepsList" class="steps-list" aria-live="polite"></div>
+        <div id="eggsList" class="eggs-list" aria-live="polite"></div>
 
         <div class="card admin-actions">
           <button id="saveButton" class="pill-button primary-button" type="button">Salvesta</button>
@@ -134,44 +132,74 @@
     </main>
   </div>
 
-  <template id="stepCardTemplate">
-    <article class="card step-card">
+  <template id="eggCardTemplate">
+    <article class="card egg-card">
       <div class="step-card-header">
         <div>
-          <p class="step-badge"></p>
-          <h3 class="step-heading"></h3>
+          <p class="step-badge egg-badge"></p>
+          <h3 class="egg-heading"></h3>
         </div>
         <div class="step-order-buttons">
-          <button class="mini-button move-up-button" type="button">Liiguta üles</button>
-          <button class="mini-button move-down-button" type="button">Liiguta alla</button>
+          <button class="mini-button egg-move-up-button" type="button">Liiguta üles</button>
+          <button class="mini-button egg-move-down-button" type="button">Liiguta alla</button>
+        </div>
+      </div>
+
+      <label class="field-label">Muna nimi</label>
+      <input class="text-input egg-title-input" type="text" maxlength="60" placeholder="Näiteks: Kollane muna">
+
+      <div class="egg-clue-tools">
+        <h4>Vihjed</h4>
+        <button class="mini-button add-clue-button" type="button">Lisa vihje sellele munale</button>
+      </div>
+
+      <div class="egg-empty-state" hidden>Sellel munal ei ole veel ühtegi vihjet.</div>
+      <div class="clues-list"></div>
+
+      <div class="step-card-actions">
+        <button class="pill-button ghost-button delete-egg-button" type="button">Kustuta muna</button>
+      </div>
+    </article>
+  </template>
+
+  <template id="clueCardTemplate">
+    <article class="clue-editor">
+      <div class="step-card-header clue-editor-header">
+        <div>
+          <p class="step-badge clue-badge"></p>
+          <h4 class="clue-heading"></h4>
+        </div>
+        <div class="step-order-buttons">
+          <button class="mini-button clue-move-up-button" type="button">Liiguta üles</button>
+          <button class="mini-button clue-move-down-button" type="button">Liiguta alla</button>
         </div>
       </div>
 
       <label class="field-label">Pealkiri (ainult vanemale)</label>
-      <input class="text-input step-title-input" type="text" maxlength="60" placeholder="Näiteks: Elutoa vihje">
+      <input class="text-input clue-title-input" type="text" maxlength="60" placeholder="Näiteks: Elutoa vihje">
 
       <label class="field-label">Vihje tekst</label>
-      <textarea class="text-area step-hint-input" rows="3" maxlength="220" placeholder="Kirjuta vihje eesti keeles"></textarea>
+      <textarea class="text-area clue-hint-input" rows="3" maxlength="220" placeholder="Kirjuta vihje eesti keeles"></textarea>
 
       <label class="field-label">Pilt (valikuline)</label>
-      <input class="file-input step-image-input" type="file" accept="image/*">
+      <input class="file-input clue-image-input" type="file" accept="image/*">
       <div class="image-preview-wrap" hidden>
         <img class="image-preview" alt="Valitud vihjepildi eelvaade">
       </div>
       <button class="mini-button remove-image-button" type="button" hidden>Eemalda pilt</button>
 
       <label class="checkbox-row">
-        <input class="step-show-image-input" type="checkbox">
-        <span>Näita pilti selles etapis</span>
+        <input class="clue-show-image-input" type="checkbox">
+        <span>Näita pilti selles vihjes</span>
       </label>
 
       <label class="checkbox-row">
-        <input class="step-auto-speak-input" type="checkbox">
-        <span>Loe vihje automaatselt ette</span>
+        <input class="clue-auto-speak-input" type="checkbox">
+        <span>Loe see vihje automaatselt ette</span>
       </label>
 
       <div class="step-card-actions">
-        <button class="pill-button ghost-button delete-step-button" type="button">Kustuta</button>
+        <button class="pill-button ghost-button delete-clue-button" type="button">Kustuta vihje</button>
       </div>
     </article>
   </template>
