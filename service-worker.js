@@ -1,4 +1,4 @@
-const CACHE_NAME = "munajaht-pwa-v12";
+const CACHE_NAME = "munajaht-pwa-v13";
 const APP_SHELL = [
   "./",
   "./index.html",

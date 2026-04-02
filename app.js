@@ -16,6 +16,8 @@ const VOICE_CHECK_DELAY = 200;
 const NEXT_CLUE_DELAY_MS = 60000;
 const EGG_TRANSITION_MS = 1200;
 const QUICK_TEST_EGG_TRANSITION_MS = 420;
+const MAX_IMAGE_DIMENSION = 1280;
+const MAX_IMAGE_DATA_URL_LENGTH = 450000;
 const DEFAULT_TITLE = "Robini munajaht 🐰";
 const ADMIN_PASSWORD = "Munajaht2026";
 
@@ -337,12 +339,25 @@ function normalizeProgress(targetState = state) {
 }
 
 function saveState(statusText = "Salvestatud 🌷") {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  showSaveStatus(statusText);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    showSaveStatus(statusText);
+    return true;
+  } catch (error) {
+    console.error("Rakenduse andmete salvestamine ebaõnnestus:", error);
+    showSaveStatus("Salvestamine ei õnnestunud. Vähenda pilti või eemalda mõni varasem pilt.");
+    return false;
+  }
 }
 
 function persistStateSilently() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch (error) {
+    console.warn("Rakenduse andmete vaikne salvestamine ebaõnnestus:", error);
+    return false;
+  }
 }
 
 function showSaveStatus(message) {
@@ -824,16 +839,107 @@ function handleClueImageSelection(clue, input) {
     return;
   }
 
-  const reader = new FileReader();
+  const previousImageDataUrl = clue.imageDataUrl;
 
-  reader.addEventListener("load", () => {
-    clue.imageDataUrl = typeof reader.result === "string" ? reader.result : "";
-    saveState("Pilt salvestati 📷");
-    renderAdmin();
-    renderGameView();
+  showSaveStatus("Valmistan pilti salvestamiseks ette...");
+
+  compressImageForStorage(file)
+    .then((compressedDataUrl) => {
+      clue.imageDataUrl = compressedDataUrl;
+
+      if (!saveState("Pilt salvestati 📷")) {
+        clue.imageDataUrl = previousImageDataUrl;
+      }
+
+      renderAdmin();
+      renderGameView();
+    })
+    .catch((error) => {
+      console.error("Pildi töötlemine ebaõnnestus:", error);
+      clue.imageDataUrl = previousImageDataUrl;
+      showSaveStatus("Pilti ei saanud töödelda. Proovi teist pilti või väiksemat faili.");
+      renderAdmin();
+      renderGameView();
+    });
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.addEventListener("load", () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error("Pildifaili lugemine ei andnud tekstitulemust."));
+    });
+
+    reader.addEventListener("error", () => {
+      reject(reader.error || new Error("Pildifaili lugemine ebaõnnestus."));
+    });
+
+    reader.readAsDataURL(file);
   });
+}
 
-  reader.readAsDataURL(file);
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.addEventListener("load", () => resolve(image), { once: true });
+    image.addEventListener("error", () => reject(new Error("Pilti ei saanud avada.")), { once: true });
+    image.src = dataUrl;
+  });
+}
+
+async function compressImageForStorage(file) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+
+  if (originalDataUrl.length <= MAX_IMAGE_DATA_URL_LENGTH) {
+    return originalDataUrl;
+  }
+
+  const image = await loadImageElement(originalDataUrl);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+
+  if (!context) {
+    throw new Error("Pildi töötlemise lõuendit ei saanud luua.");
+  }
+
+  let width = image.naturalWidth || image.width;
+  let height = image.naturalHeight || image.height;
+
+  if (!width || !height) {
+    throw new Error("Pildi mõõte ei saanud lugeda.");
+  }
+
+  const firstScale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+  width = Math.max(1, Math.round(width * firstScale));
+  height = Math.max(1, Math.round(height * firstScale));
+
+  while (width >= 1 && height >= 1) {
+    canvas.width = width;
+    canvas.height = height;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    for (const quality of [0.82, 0.72, 0.62, 0.5, 0.4]) {
+      const candidate = canvas.toDataURL("image/jpeg", quality);
+
+      if (candidate.length <= MAX_IMAGE_DATA_URL_LENGTH) {
+        return candidate;
+      }
+    }
+
+    width = Math.max(1, Math.round(width * 0.82));
+    height = Math.max(1, Math.round(height * 0.82));
+  }
+
+  throw new Error("Pilt jäi salvestamiseks liiga suureks.");
 }
 
 function renderGameView() {
